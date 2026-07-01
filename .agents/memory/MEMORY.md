@@ -1,2 +1,3 @@
 - [Date columns vs zod coerce](date-columns-zod-coerce.md) — DB date cols are string-mode but codegen zod uses coerce.date(); convert to YYYY-MM-DD (`toISOString().slice(0,10)`) on writes.
-- [Salary processing deposits](salary-processing-deposits.md) — /salary/process makes one categorized deposit per allocation + remainder = full salary; needs salary.accountId; loans not auto-deposited.
+- [Salary processing deposits](salary-processing-deposits.md) — /salary/process is re-runnable; deposits full salary split into category/remainder/debt subcategories.
+- [Account breakdown & transfers](account-breakdown-transfers.md) — balances/breakdown are transaction.accountId based; transfer = move a subcategory's transactions between accounts.

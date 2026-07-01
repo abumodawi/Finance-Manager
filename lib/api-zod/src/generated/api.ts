@@ -612,6 +612,20 @@ export const DeleteTransactionResponse = zod.void()
 
 
 /**
+ * @summary Move a subcategory's transactions from one account to another
+ */
+export const MoveSubcategoryFundsBody = zod.object({
+  "subcategoryId": zod.number(),
+  "fromAccountId": zod.number(),
+  "toAccountId": zod.number()
+})
+
+export const MoveSubcategoryFundsResponse = zod.object({
+  "moved": zod.number().describe('Number of transactions moved')
+})
+
+
+/**
  * @summary Dashboard overview - total balances, monthly spend, salary
  */
 export const GetDashboardSummaryResponse = zod.object({

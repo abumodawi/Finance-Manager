@@ -39,6 +39,8 @@ import type {
   Loan,
   LoanInput,
   LoanUpdate,
+  MoveSubcategoryInput,
+  MoveSubcategoryResult,
   Salary,
   SalaryAllocation,
   SalaryAllocationInput,
@@ -2115,6 +2117,76 @@ export const useDeleteTransaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteTransactionMutationOptions(options));
+    }
+
+export const getMoveSubcategoryFundsUrl = () => {
+
+
+
+
+  return `/api/transactions/move`
+}
+
+/**
+ * @summary Move a subcategory's transactions from one account to another
+ */
+export const moveSubcategoryFunds = async (moveSubcategoryInput: MoveSubcategoryInput, options?: RequestInit): Promise<MoveSubcategoryResult> => {
+
+  return customFetch<MoveSubcategoryResult>(getMoveSubcategoryFundsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(moveSubcategoryInput)
+  }
+);}
+
+
+
+
+export const getMoveSubcategoryFundsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveSubcategoryFunds>>, TError,{data: BodyType<MoveSubcategoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof moveSubcategoryFunds>>, TError,{data: BodyType<MoveSubcategoryInput>}, TContext> => {
+
+const mutationKey = ['moveSubcategoryFunds'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof moveSubcategoryFunds>>, {data: BodyType<MoveSubcategoryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  moveSubcategoryFunds(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MoveSubcategoryFundsMutationResult = NonNullable<Awaited<ReturnType<typeof moveSubcategoryFunds>>>
+    export type MoveSubcategoryFundsMutationBody = BodyType<MoveSubcategoryInput>
+    export type MoveSubcategoryFundsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Move a subcategory's transactions from one account to another
+ */
+export const useMoveSubcategoryFunds = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveSubcategoryFunds>>, TError,{data: BodyType<MoveSubcategoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof moveSubcategoryFunds>>,
+        TError,
+        {data: BodyType<MoveSubcategoryInput>},
+        TContext
+      > => {
+      return useMutation(getMoveSubcategoryFundsMutationOptions(options));
     }
 
 export const getGetDashboardSummaryUrl = () => {

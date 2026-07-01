@@ -29,6 +29,8 @@ export * from './listTransactionsType';
 export * from './loan';
 export * from './loanInput';
 export * from './loanUpdate';
+export * from './moveSubcategoryInput';
+export * from './moveSubcategoryResult';
 export * from './salary';
 export * from './salaryAllocation';
 export * from './salaryAllocationInput';

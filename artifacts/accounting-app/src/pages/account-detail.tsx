@@ -2,9 +2,9 @@ import { Link } from "wouter";
 import {
   useGetAccountBreakdown,
   useListAccounts,
-  useListCategories,
-  useUpdateCategory,
-  getListCategoriesQueryKey,
+  useMoveSubcategoryFunds,
+  getListAccountsQueryKey,
+  getGetDashboardSummaryQueryKey,
   getGetAccountBreakdownQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,19 +27,26 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
     }
   );
   const { data: accounts } = useListAccounts();
-  const { data: allCategories } = useListCategories();
-  const updateCategory = useUpdateCategory();
+  const moveFunds = useMoveSubcategoryFunds();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const handleTransferCategory = (categoryId: number, newAccountId: string) => {
-    updateCategory.mutate(
-      { id: categoryId, data: { accountId: newAccountId === "none" ? null : parseInt(newAccountId) } },
+  const handleMoveSubcategory = (subcategoryId: number, toAccountId: string) => {
+    const target = parseInt(toAccountId);
+    if (isNaN(target) || target === accountId) return;
+    moveFunds.mutate(
+      { data: { subcategoryId, fromAccountId: accountId, toAccountId: target } },
       {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+        onSuccess: (result) => {
+          if (result.moved === 0) {
+            toast({ title: "لا توجد مبالغ في هذا التصنيف لنقلها" });
+            return;
+          }
           queryClient.invalidateQueries({ queryKey: getGetAccountBreakdownQueryKey({ accountId }) });
-          toast({ title: "تم نقل التصنيف بنجاح" });
+          queryClient.invalidateQueries({ queryKey: getGetAccountBreakdownQueryKey({ accountId: target }) });
+          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast({ title: "تم نقل التصنيف الفرعي إلى الحساب الآخر" });
         },
         onError: () => toast({ title: "حدث خطأ أثناء النقل", variant: "destructive" }),
       }
@@ -123,31 +130,9 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
           {categories.map((cat) => (
             <Card key={cat.id}>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-2xl shrink-0">{cat.emoji}</span>
-                    <p className="font-bold truncate">{cat.name}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    <Select
-                      value={(() => {
-                        const assigned = allCategories?.find((c) => c.id === cat.id)?.accountId;
-                        return assigned != null ? String(assigned) : "none";
-                      })()}
-                      onValueChange={(v) => handleTransferCategory(cat.id, v)}
-                    >
-                      <SelectTrigger className="h-8 w-36 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">بدون حساب</SelectItem>
-                        {accounts?.map((acc) => (
-                          <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="flex items-center gap-2 min-w-0 mb-3">
+                  <span className="text-2xl shrink-0">{cat.emoji}</span>
+                  <p className="font-bold truncate">{cat.name}</p>
                 </div>
 
                 {cat.subcategories.length === 0 ? (
@@ -155,20 +140,36 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
                 ) : (
                   <div className="divide-y rounded-lg border">
                     {cat.subcategories.map((sub) => (
-                      <div key={sub.id} className="flex items-center justify-between gap-3 p-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-lg shrink-0">{sub.emoji}</span>
-                          <span className="font-medium truncate">{sub.name}</span>
+                      <div key={sub.id} className="p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-lg shrink-0">{sub.emoji}</span>
+                            <span className="font-medium truncate">{sub.name}</span>
+                          </div>
+                          <div className="flex items-center gap-4 shrink-0 text-sm">
+                            <span className="text-green-600" title="الوارد">+{formatCurrency(sub.received)}</span>
+                            <span className="text-destructive" title="المصروف">-{formatCurrency(sub.spent)}</span>
+                            <span
+                              className={`font-bold w-24 text-left ${sub.net >= 0 ? "text-foreground" : "text-destructive"}`}
+                              title="الصافي"
+                            >
+                              {formatCurrency(sub.net)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4 shrink-0 text-sm">
-                          <span className="text-green-600" title="الوارد">+{formatCurrency(sub.received)}</span>
-                          <span className="text-destructive" title="المصروف">-{formatCurrency(sub.spent)}</span>
-                          <span
-                            className={`font-bold w-24 text-left ${sub.net >= 0 ? "text-foreground" : "text-destructive"}`}
-                            title="الصافي"
-                          >
-                            {formatCurrency(sub.net)}
-                          </span>
+                        <div className="flex items-center justify-end gap-1">
+                          <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-xs text-muted-foreground ml-1">نقل إلى</span>
+                          <Select value={String(accountId)} onValueChange={(v) => handleMoveSubcategory(sub.id, v)}>
+                            <SelectTrigger className="h-8 w-36 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent position="popper" side="bottom" avoidCollisions={false}>
+                              {accounts?.map((acc) => (
+                                <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     ))}

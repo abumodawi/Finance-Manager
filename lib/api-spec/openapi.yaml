@@ -533,6 +533,25 @@ paths:
         "204":
           description: Deleted
 
+  /transactions/move:
+    post:
+      operationId: moveSubcategoryFunds
+      tags: [transactions]
+      summary: Move a subcategory's transactions from one account to another
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveSubcategoryInput"
+      responses:
+        "200":
+          description: Move result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoveSubcategoryResult"
+
   /summary/dashboard:
     get:
       operationId: getDashboardSummary
@@ -839,6 +858,20 @@ components:
         accountId:     { type: integer }
         subcategoryId: { type: ["integer", "null"] }
         notes:         { type: ["string", "null"] }
+
+    MoveSubcategoryInput:
+      type: object
+      required: [subcategoryId, fromAccountId, toAccountId]
+      properties:
+        subcategoryId: { type: integer }
+        fromAccountId: { type: integer }
+        toAccountId:   { type: integer }
+
+    MoveSubcategoryResult:
+      type: object
+      required: [moved]
+      properties:
+        moved: { type: integer, description: "Number of transactions moved" }
 
     DashboardSummary:
       type: object

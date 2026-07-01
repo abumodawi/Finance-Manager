@@ -17,6 +17,31 @@ function currentMonthStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Find-or-create a well-known "system" category and one subcategory under it,
+// used to surface the salary remainder and the debt/installments as real
+// subcategories in the account breakdown. Returns the subcategory id.
+async function ensureSystemSubcategory(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  categoryName: string,
+  categoryEmoji: string,
+  subName: string,
+  subEmoji: string,
+): Promise<number> {
+  let [cat] = await tx.select().from(categoriesTable).where(eq(categoriesTable.name, categoryName)).limit(1);
+  if (!cat) {
+    [cat] = await tx.insert(categoriesTable).values({ name: categoryName, emoji: categoryEmoji }).returning();
+  }
+  let [sub] = await tx
+    .select()
+    .from(subcategoriesTable)
+    .where(and(eq(subcategoriesTable.categoryId, cat.id), eq(subcategoriesTable.name, subName)))
+    .limit(1);
+  if (!sub) {
+    [sub] = await tx.insert(subcategoriesTable).values({ categoryId: cat.id, name: subName, emoji: subEmoji }).returning();
+  }
+  return sub.id;
+}
+
 function formatSalary(s: typeof salaryTable.$inferSelect, accountName: string | null) {
   return {
     id: s.id,
@@ -293,6 +318,14 @@ router.post("/salary/process", async (req, res): Promise<void> => {
     // released automatically at the end of the transaction.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`salary-process-${month}`}))`);
 
+    // The remainder and the loan installments are surfaced as their own
+    // subcategories so they appear in the account breakdown (making the balance
+    // add up) and can later be transferred to another account or spent from.
+    // A global lock guards the find-or-create against races across months.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('salary-system-subcategories'))`);
+    const remainderSubId = await ensureSystemSubcategory(tx, "المتبقي من الراتب", "💰", "المتبقي", "💰");
+    const debtSubId = await ensureSystemSubcategory(tx, "الديون", "🏦", "الأقساط", "📄");
+
     // Remove ONLY the salary deposits previously created for this month. They
     // are deposits whose note starts with the salary prefix for this month, so
     // manual deposits/expenses are never touched.
@@ -319,7 +352,8 @@ router.post("/salary/process", async (req, res): Promise<void> => {
       });
     }
 
-    // One deposit per active loan so the debt portion is visible too.
+    // One deposit per active loan under the "الديون" subcategory so the debt
+    // portion is visible in the breakdown and can be moved/spent later.
     for (const loan of activeLoans) {
       if (!(parseFloat(loan.monthlyInstallment) > 0)) continue;
       await tx.insert(transactionsTable).values({
@@ -327,20 +361,22 @@ router.post("/salary/process", async (req, res): Promise<void> => {
         amount: loan.monthlyInstallment,
         date: dateStr,
         accountId,
-        subcategoryId: null,
+        subcategoryId: debtSubId,
         notes: `راتب ${month} - قسط ${loan.name}`,
       });
     }
 
-    // Deposit any unallocated remainder so the account balance equals the full
-    // salary. If nothing was committed, this is the entire salary.
+    // Deposit any unallocated remainder under the "المتبقي من الراتب"
+    // subcategory so the account balance equals the full salary and the leftover
+    // can be transferred or spent later. If nothing was committed, this is the
+    // entire salary.
     if (remainder > 0.009) {
       await tx.insert(transactionsTable).values({
         type: "deposit",
         amount: remainder.toFixed(2),
         date: dateStr,
         accountId,
-        subcategoryId: null,
+        subcategoryId: remainderSubId,
         notes: committedTotal > 0.009 ? `راتب ${month} - غير موزع` : `راتب ${month}`,
       });
     }

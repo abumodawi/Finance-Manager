@@ -278,6 +278,17 @@ export interface TransactionUpdate {
   notes?: string | null;
 }
 
+export interface MoveSubcategoryInput {
+  subcategoryId: number;
+  fromAccountId: number;
+  toAccountId: number;
+}
+
+export interface MoveSubcategoryResult {
+  /** Number of transactions moved */
+  moved: number;
+}
+
 export interface AccountBalance {
   accountId: number;
   name: string;

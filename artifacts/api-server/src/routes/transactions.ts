@@ -1,12 +1,13 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte } from "drizzle-orm";
-import { db, transactionsTable, subcategoriesTable, categoriesTable } from "@workspace/db";
+import { db, transactionsTable, subcategoriesTable, categoriesTable, accountsTable } from "@workspace/db";
 import {
   CreateTransactionBody,
   UpdateTransactionParams,
   UpdateTransactionBody,
   DeleteTransactionParams,
   ListTransactionsQueryParams,
+  MoveSubcategoryFundsBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -120,6 +121,44 @@ router.patch("/transactions/:id", async (req, res): Promise<void> => {
     return;
   }
   res.json(await enrichTransaction(t));
+});
+
+router.post("/transactions/move", async (req, res): Promise<void> => {
+  const parsed = MoveSubcategoryFundsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { subcategoryId, fromAccountId, toAccountId } = parsed.data;
+
+  if (fromAccountId === toAccountId) {
+    res.status(400).json({ error: "الحساب المصدر والوجهة متطابقان" });
+    return;
+  }
+
+  const [sub] = await db.select().from(subcategoriesTable).where(eq(subcategoriesTable.id, subcategoryId));
+  if (!sub) {
+    res.status(404).json({ error: "التصنيف الفرعي غير موجود" });
+    return;
+  }
+  const [toAccount] = await db.select().from(accountsTable).where(eq(accountsTable.id, toAccountId));
+  if (!toAccount) {
+    res.status(404).json({ error: "الحساب الوجهة غير موجود" });
+    return;
+  }
+
+  const moved = await db
+    .update(transactionsTable)
+    .set({ accountId: toAccountId })
+    .where(
+      and(
+        eq(transactionsTable.accountId, fromAccountId),
+        eq(transactionsTable.subcategoryId, subcategoryId),
+      ),
+    )
+    .returning({ id: transactionsTable.id });
+
+  res.json({ moved: moved.length });
 });
 
 router.delete("/transactions/:id", async (req, res): Promise<void> => {
