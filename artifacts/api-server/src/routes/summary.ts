@@ -261,12 +261,18 @@ router.get("/summary/account-breakdown", async (req, res): Promise<void> => {
     .groupBy(transactionsTable.subcategoryId);
 
   const aggMap = new Map<number, { received: number; spent: number }>();
+  // Money on transactions with no subcategory is bucketed into an "غير مصنف"
+  // (uncategorized) group so it is never hidden and the sum of all categories
+  // plus the initial balance always equals the current balance.
+  let uncategorized = { received: 0, spent: 0 };
   for (const row of agg) {
     if (row.subcategoryId != null) {
       aggMap.set(row.subcategoryId, {
         received: parseFloat(row.received),
         spent: parseFloat(row.spent),
       });
+    } else {
+      uncategorized = { received: parseFloat(row.received), spent: parseFloat(row.spent) };
     }
   }
 
@@ -298,6 +304,26 @@ router.get("/summary/account-breakdown", async (req, res): Promise<void> => {
       };
     })
     .filter((c) => c.subcategories.length > 0);
+
+  if (uncategorized.received > 0.0001 || uncategorized.spent > 0.0001) {
+    totalReceived += uncategorized.received;
+    totalSpent += uncategorized.spent;
+    categories.push({
+      id: -1,
+      name: "غير مصنف",
+      emoji: "❓",
+      subcategories: [
+        {
+          id: -1,
+          name: "غير مصنف",
+          emoji: "❓",
+          received: uncategorized.received,
+          spent: uncategorized.spent,
+          net: uncategorized.received - uncategorized.spent,
+        },
+      ],
+    });
+  }
 
   res.json({
     account: {

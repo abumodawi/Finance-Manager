@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { 
   useListTransactions, 
   useCreateTransaction, 
@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, salaryMonthOf } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -82,6 +82,54 @@ export default function Transactions() {
       });
     }
   };
+
+  const handleDeleteSalary = async (ids: number[]) => {
+    if (!confirm("سيتم حذف الراتب بالكامل (جميع إيداعات هذا الشهر). هل أنت متأكد؟")) return;
+    try {
+      for (const id of ids) {
+        await deleteTransaction.mutateAsync({ id });
+      }
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      toast({ title: "تم حذف الراتب" });
+    } catch {
+      toast({ title: "حدث خطأ أثناء الحذف", variant: "destructive" });
+    }
+  };
+
+  // Collapse the many per-subcategory salary deposits of a month into a single
+  // "الراتب" row so the operations list stays readable.
+  const displayRows = useMemo(() => {
+    const list = transactions ?? [];
+    const groups = new Map<string, { date: string; amount: number; ids: number[] }>();
+    for (const tx of list) {
+      const m = salaryMonthOf(tx);
+      if (!m) continue;
+      const g = groups.get(m) ?? { date: tx.date, amount: 0, ids: [] };
+      g.amount += tx.amount;
+      g.ids.push(tx.id);
+      groups.set(m, g);
+    }
+    const emitted = new Set<string>();
+    const rows: Array<
+      | { kind: "tx"; tx: (typeof list)[number] }
+      | { kind: "salary"; key: string; date: string; amount: number; ids: number[] }
+    > = [];
+    for (const tx of list) {
+      const m = salaryMonthOf(tx);
+      if (m) {
+        if (!emitted.has(m)) {
+          emitted.add(m);
+          const g = groups.get(m)!;
+          rows.push({ kind: "salary", key: `salary-${m}`, date: g.date, amount: g.amount, ids: g.ids });
+        }
+      } else {
+        rows.push({ kind: "tx", tx });
+      }
+    }
+    return rows;
+  }, [transactions]);
 
   return (
     <div className="space-y-6">
@@ -200,31 +248,51 @@ export default function Transactions() {
             </div>
           ) : (
             <div className="divide-y">
-              {transactions?.map(tx => (
-                <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors group">
-                  <div className="flex items-center gap-4">
-                    <div className={cn("p-2 rounded-full", tx.type === "expense" ? "bg-destructive/10 text-destructive" : "bg-green-600/10 text-green-600")}>
-                      {tx.type === "expense" ? <ArrowUpCircle className="h-6 w-6" /> : <ArrowDownCircle className="h-6 w-6" />}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-base">
-                        {tx.subcategoryName ?? (tx.type === "expense" ? "مصروف" : "إيداع")}
-                        {tx.notes && <span className="text-sm font-normal text-muted-foreground mr-2">({tx.notes})</span>}
+              {displayRows.map((row) =>
+                row.kind === "salary" ? (
+                  <div key={row.key} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors group">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 rounded-full bg-green-600/10 text-green-600">
+                        <ArrowDownCircle className="h-6 w-6" />
                       </div>
-                      <div className="text-sm text-muted-foreground">{formatDate(tx.date)}</div>
+                      <div>
+                        <div className="font-semibold text-base">الراتب</div>
+                        <div className="text-sm text-muted-foreground">{formatDate(row.date)}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="font-bold text-lg text-green-600">+{formatCurrency(row.amount)}</div>
+                      <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDeleteSalary(row.ids)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className={cn("font-bold text-lg", tx.type === "expense" ? "text-destructive" : "text-green-600")}>
-                      {tx.type === "expense" ? "-" : "+"}{formatCurrency(tx.amount)}
+                ) : (
+                  <div key={row.tx.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors group">
+                    <div className="flex items-center gap-4">
+                      <div className={cn("p-2 rounded-full", row.tx.type === "expense" ? "bg-destructive/10 text-destructive" : "bg-green-600/10 text-green-600")}>
+                        {row.tx.type === "expense" ? <ArrowUpCircle className="h-6 w-6" /> : <ArrowDownCircle className="h-6 w-6" />}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-base">
+                          {row.tx.subcategoryName ?? (row.tx.type === "expense" ? "مصروف" : "إيداع")}
+                          {row.tx.notes && <span className="text-sm font-normal text-muted-foreground mr-2">({row.tx.notes})</span>}
+                        </div>
+                        <div className="text-sm text-muted-foreground">{formatDate(row.tx.date)}</div>
+                      </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDelete(tx.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-4">
+                      <div className={cn("font-bold text-lg", row.tx.type === "expense" ? "text-destructive" : "text-green-600")}>
+                        {row.tx.type === "expense" ? "-" : "+"}{formatCurrency(row.tx.amount)}
+                      </div>
+                      <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDelete(row.tx.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
-              {(!transactions || transactions.length === 0) && (
+                )
+              )}
+              {displayRows.length === 0 && (
                 <div className="p-12 text-center text-muted-foreground">لا توجد عمليات في هذا الشهر</div>
               )}
             </div>

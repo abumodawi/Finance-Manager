@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, like, sql } from "drizzle-orm";
+import { eq, and, like, inArray, sql } from "drizzle-orm";
 import { db, salaryTable, accountsTable, salaryAllocationsTable, categoriesTable, subcategoriesTable, transactionsTable, salaryProcessingLogTable, loansTable } from "@workspace/db";
 import {
   UpsertSalaryBody,
@@ -17,27 +17,76 @@ function currentMonthStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// Find-or-create a well-known "system" category and one subcategory under it,
-// used to surface the salary remainder and the debt/installments as real
-// subcategories in the account breakdown. Returns the subcategory id.
+// Find-or-create a well-known "system" category with a single subcategory,
+// used to surface the salary remainder ("الإدخار") and the debt/installments
+// ("الديون") as real subcategories in the account breakdown. Renames are applied
+// IN PLACE (matched by known aliases and the category's existing subcategory) so
+// previously tagged deposits keep their subcategory id and simply show under the
+// new name — no reprocessing is required just to pick up a rename.
 async function ensureSystemSubcategory(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  categoryName: string,
-  categoryEmoji: string,
-  subName: string,
-  subEmoji: string,
+  opts: {
+    categoryAliases: string[];
+    categoryName: string;
+    categoryEmoji: string;
+    subName: string;
+    subEmoji: string;
+  },
 ): Promise<number> {
-  let [cat] = await tx.select().from(categoriesTable).where(eq(categoriesTable.name, categoryName)).limit(1);
+  const names = Array.from(new Set([opts.categoryName, ...opts.categoryAliases]));
+  let [cat] = await tx
+    .select()
+    .from(categoriesTable)
+    .where(inArray(categoriesTable.name, names))
+    .orderBy(categoriesTable.id)
+    .limit(1);
   if (!cat) {
-    [cat] = await tx.insert(categoriesTable).values({ name: categoryName, emoji: categoryEmoji }).returning();
+    [cat] = await tx.insert(categoriesTable).values({ name: opts.categoryName, emoji: opts.categoryEmoji }).returning();
+  } else if (cat.name !== opts.categoryName) {
+    [cat] = await tx
+      .update(categoriesTable)
+      .set({ name: opts.categoryName, emoji: opts.categoryEmoji })
+      .where(eq(categoriesTable.id, cat.id))
+      .returning();
   }
+  // System categories hold exactly one subcategory; reuse it (renaming in place)
+  // so historical deposits tagged to it are preserved across renames.
   let [sub] = await tx
     .select()
     .from(subcategoriesTable)
-    .where(and(eq(subcategoriesTable.categoryId, cat.id), eq(subcategoriesTable.name, subName)))
+    .where(eq(subcategoriesTable.categoryId, cat.id))
+    .orderBy(subcategoriesTable.id)
     .limit(1);
   if (!sub) {
-    [sub] = await tx.insert(subcategoriesTable).values({ categoryId: cat.id, name: subName, emoji: subEmoji }).returning();
+    [sub] = await tx.insert(subcategoriesTable).values({ categoryId: cat.id, name: opts.subName, emoji: opts.subEmoji }).returning();
+  } else if (sub.name !== opts.subName) {
+    [sub] = await tx
+      .update(subcategoriesTable)
+      .set({ name: opts.subName, emoji: opts.subEmoji })
+      .where(eq(subcategoriesTable.id, sub.id))
+      .returning();
+  }
+  return sub.id;
+}
+
+// For a category-level salary allocation (no subcategory chosen), ensure a
+// stable default subcategory named after the category so the allocated amount is
+// tagged and therefore visible in the account breakdown (find-or-create by name,
+// so reprocessing is idempotent).
+async function ensureCategoryDefaultSubcategory(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  categoryId: number,
+): Promise<number> {
+  const [cat] = await tx.select().from(categoriesTable).where(eq(categoriesTable.id, categoryId));
+  const defaultName = cat?.name ?? "عام";
+  const defaultEmoji = cat?.emoji ?? "📌";
+  let [sub] = await tx
+    .select()
+    .from(subcategoriesTable)
+    .where(and(eq(subcategoriesTable.categoryId, categoryId), eq(subcategoriesTable.name, defaultName)))
+    .limit(1);
+  if (!sub) {
+    [sub] = await tx.insert(subcategoriesTable).values({ categoryId, name: defaultName, emoji: defaultEmoji }).returning();
   }
   return sub.id;
 }
@@ -323,8 +372,20 @@ router.post("/salary/process", async (req, res): Promise<void> => {
     // add up) and can later be transferred to another account or spent from.
     // A global lock guards the find-or-create against races across months.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('salary-system-subcategories'))`);
-    const remainderSubId = await ensureSystemSubcategory(tx, "المتبقي من الراتب", "💰", "إدخال", "📥");
-    const debtSubId = await ensureSystemSubcategory(tx, "الديون", "🏦", "الأقساط", "📄");
+    const remainderSubId = await ensureSystemSubcategory(tx, {
+      categoryAliases: ["المتبقي من الراتب"],
+      categoryName: "الإدخار",
+      categoryEmoji: "📥",
+      subName: "إدخار",
+      subEmoji: "📥",
+    });
+    const debtSubId = await ensureSystemSubcategory(tx, {
+      categoryAliases: [],
+      categoryName: "الديون",
+      categoryEmoji: "🏦",
+      subName: "الأقساط",
+      subEmoji: "📄",
+    });
 
     // Remove ONLY the salary deposits previously created for this month. They
     // are deposits whose note starts with the salary prefix for this month, so
@@ -342,12 +403,15 @@ router.post("/salary/process", async (req, res): Promise<void> => {
     // list, the account statement, and as "received" per subcategory.
     for (const alloc of positiveAllocations) {
       const label = alloc.subcategoryName ?? alloc.categoryName ?? "";
+      // Category-level allocations (no subcategory) get a stable default
+      // subcategory so their money is tagged and shows in the breakdown.
+      const subId = alloc.subcategoryId ?? (await ensureCategoryDefaultSubcategory(tx, alloc.categoryId));
       await tx.insert(transactionsTable).values({
         type: "deposit",
         amount: alloc.amount,
         date: dateStr,
         accountId,
-        subcategoryId: alloc.subcategoryId ?? null,
+        subcategoryId: subId,
         notes: `راتب ${month}${label ? ` - ${label}` : ""}`,
       });
     }

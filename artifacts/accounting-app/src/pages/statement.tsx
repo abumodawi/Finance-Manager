@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { 
   useGetAccountStatement,
   useListAccounts,
@@ -7,8 +7,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { formatCurrency, formatDate, salaryMonthOf } from "@/lib/utils";
 
 export default function Statement() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
@@ -21,6 +20,36 @@ export default function Statement() {
     { accountId: accountIdNum, month: filterMonth },
     { query: { enabled: !!accountIdNum, queryKey: getGetAccountStatementQueryKey({ accountId: accountIdNum, month: filterMonth }) } }
   );
+
+  // Collapse consecutive per-subcategory salary deposits (same date) into one
+  // "الراتب" line, keeping the running balance after the last of them.
+  const rows = useMemo(() => {
+    const txs = statement?.transactions ?? [];
+    const out: Array<
+      | { kind: "tx"; tx: (typeof txs)[number] }
+      | { kind: "salary"; key: string; date: string; amount: number; runningBalance: number }
+    > = [];
+    let i = 0;
+    while (i < txs.length) {
+      const m = salaryMonthOf(txs[i]);
+      if (m) {
+        let amount = 0;
+        let runningBalance = txs[i].runningBalance;
+        let j = i;
+        while (j < txs.length && salaryMonthOf(txs[j]) === m) {
+          amount += txs[j].amount;
+          runningBalance = txs[j].runningBalance;
+          j++;
+        }
+        out.push({ kind: "salary", key: `salary-${m}-${i}`, date: txs[i].date, amount, runningBalance });
+        i = j;
+      } else {
+        out.push({ kind: "tx", tx: txs[i] });
+        i++;
+      }
+    }
+    return out;
+  }, [statement]);
 
   return (
     <div className="space-y-6">
@@ -92,25 +121,41 @@ export default function Statement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {statement.transactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-4 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
-                      <td className="p-4">
-                        <div className="font-medium">{tx.subcategoryName || (tx.type === 'deposit' ? 'إيداع' : 'مصروف')}</div>
-                        {tx.notes && <div className="text-xs text-muted-foreground mt-0.5">{tx.notes}</div>}
-                      </td>
-                      <td className="p-4 text-green-600 font-medium whitespace-nowrap">
-                        {tx.type === 'deposit' ? formatCurrency(tx.amount) : '-'}
-                      </td>
-                      <td className="p-4 text-destructive font-medium whitespace-nowrap">
-                        {tx.type === 'expense' ? formatCurrency(tx.amount) : '-'}
-                      </td>
-                      <td className="p-4 font-bold whitespace-nowrap bg-muted/10">
-                        {formatCurrency(tx.runningBalance)}
-                      </td>
-                    </tr>
-                  ))}
-                  {statement.transactions.length === 0 && (
+                  {rows.map((row) =>
+                    row.kind === "salary" ? (
+                      <tr key={row.key} className="hover:bg-muted/20 transition-colors">
+                        <td className="p-4 text-muted-foreground whitespace-nowrap">{formatDate(row.date)}</td>
+                        <td className="p-4">
+                          <div className="font-medium">الراتب</div>
+                        </td>
+                        <td className="p-4 text-green-600 font-medium whitespace-nowrap">
+                          {formatCurrency(row.amount)}
+                        </td>
+                        <td className="p-4 text-destructive font-medium whitespace-nowrap">-</td>
+                        <td className="p-4 font-bold whitespace-nowrap bg-muted/10">
+                          {formatCurrency(row.runningBalance)}
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={row.tx.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="p-4 text-muted-foreground whitespace-nowrap">{formatDate(row.tx.date)}</td>
+                        <td className="p-4">
+                          <div className="font-medium">{row.tx.subcategoryName || (row.tx.type === 'deposit' ? 'إيداع' : 'مصروف')}</div>
+                          {row.tx.notes && <div className="text-xs text-muted-foreground mt-0.5">{row.tx.notes}</div>}
+                        </td>
+                        <td className="p-4 text-green-600 font-medium whitespace-nowrap">
+                          {row.tx.type === 'deposit' ? formatCurrency(row.tx.amount) : '-'}
+                        </td>
+                        <td className="p-4 text-destructive font-medium whitespace-nowrap">
+                          {row.tx.type === 'expense' ? formatCurrency(row.tx.amount) : '-'}
+                        </td>
+                        <td className="p-4 font-bold whitespace-nowrap bg-muted/10">
+                          {formatCurrency(row.tx.runningBalance)}
+                        </td>
+                      </tr>
+                    )
+                  )}
+                  {rows.length === 0 && (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-muted-foreground">لا توجد حركات في هذه الفترة</td>
                     </tr>
