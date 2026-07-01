@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, salaryTable, accountsTable, salaryAllocationsTable, categoriesTable, subcategoriesTable, transactionsTable, salaryProcessingLogTable } from "@workspace/db";
+import { eq, and, like, sql } from "drizzle-orm";
+import { db, salaryTable, accountsTable, salaryAllocationsTable, categoriesTable, subcategoriesTable, transactionsTable, salaryProcessingLogTable, loansTable } from "@workspace/db";
 import {
   UpsertSalaryBody,
   CreateSalaryAllocationBody,
@@ -215,17 +215,6 @@ router.post("/salary/process", async (req, res): Promise<void> => {
   const month = parsed.data.month || currentMonthStr();
   const isCurrentMonth = month === currentMonthStr();
 
-  const existing = await db
-    .select()
-    .from(salaryProcessingLogTable)
-    .where(eq(salaryProcessingLogTable.processedMonth, month))
-    .limit(1);
-
-  if (existing.length) {
-    res.json({ processed: false, alreadyProcessed: true, message: `تم معالجة راتب ${month} مسبقاً` });
-    return;
-  }
-
   const salaryRows = await db
     .select()
     .from(salaryTable)
@@ -273,73 +262,102 @@ router.post("/salary/process", async (req, res): Promise<void> => {
   const positiveAllocations = allocations.filter((a) => parseFloat(a.amount) > 0);
   const allocatedTotal = positiveAllocations.reduce((sum, a) => sum + parseFloat(a.amount), 0);
 
-  // Guard: allocations must not exceed the salary, otherwise the total deposited
-  // would be larger than the salary and the balance would be wrong.
-  if (allocatedTotal > salaryAmount + 0.009) {
+  // Active loans are treated as a "debt" portion of the salary: each installment
+  // becomes its own deposit so the debt shows up alongside the categories.
+  const activeLoans = await db.select().from(loansTable).where(eq(loansTable.isActive, true));
+  const loanTotal = activeLoans.reduce((sum, l) => sum + parseFloat(l.monthlyInstallment), 0);
+
+  const committedTotal = allocatedTotal + loanTotal;
+
+  // Guard: allocations + installments must not exceed the salary, otherwise the
+  // total deposited would be larger than the salary and the balance would be wrong.
+  if (committedTotal > salaryAmount + 0.009) {
     res.json({
       processed: false,
       alreadyProcessed: false,
-      message: `مجموع التوزيعات (${allocatedTotal.toFixed(2)}) أكبر من الراتب (${salaryAmount.toFixed(2)})، عدّل التوزيعات ثم أعد المعالجة`,
+      message: `مجموع التوزيعات والأقساط (${committedTotal.toFixed(2)}) أكبر من الراتب (${salaryAmount.toFixed(2)})، عدّل التوزيعات ثم أعد المعالجة`,
     });
     return;
   }
 
   const allocsForBudget = await db.select().from(salaryAllocationsTable);
-  const remainder = salaryAmount - allocatedTotal;
+  const remainder = salaryAmount - committedTotal;
 
-  // Wrap all writes in a single transaction. Inserting the processing-log row
-  // first (it has a unique constraint on processedMonth) makes the whole
-  // operation idempotent: a concurrent duplicate call rolls back cleanly.
-  try {
-    await db.transaction(async (tx) => {
-      await tx.insert(salaryProcessingLogTable).values({ processedMonth: month });
+  // Processing a month is re-runnable: remove any previously created salary
+  // deposits for this month (identified by their note prefix) and recreate them.
+  // This also unblocks months that were logged as processed under older code
+  // that never actually created a deposit. All writes happen in one transaction.
+  await db.transaction(async (tx) => {
+    // Serialize processing of the same month so two concurrent requests cannot
+    // both delete-and-recreate and end up with duplicate deposits. The lock is
+    // released automatically at the end of the transaction.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`salary-process-${month}`}))`);
 
-      // One categorized deposit per allocation so each shows up in the
-      // operations list, the account statement, and as "received" per subcategory.
-      for (const alloc of positiveAllocations) {
-        const label = alloc.subcategoryName ?? alloc.categoryName ?? "";
-        await tx.insert(transactionsTable).values({
-          type: "deposit",
-          amount: alloc.amount,
-          date: dateStr,
-          accountId,
-          subcategoryId: alloc.subcategoryId ?? null,
-          notes: `راتب ${month}${label ? ` - ${label}` : ""}`,
-        });
-      }
+    // Remove ONLY the salary deposits previously created for this month. They
+    // are deposits whose note starts with the salary prefix for this month, so
+    // manual deposits/expenses are never touched.
+    await tx
+      .delete(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.type, "deposit"),
+          like(transactionsTable.notes, `راتب ${month}%`),
+        ),
+      );
 
-      // Deposit any unallocated remainder so the account balance equals the full
-      // salary. If there were no allocations, this is the entire salary.
-      if (remainder > 0.009) {
-        await tx.insert(transactionsTable).values({
-          type: "deposit",
-          amount: remainder.toFixed(2),
-          date: dateStr,
-          accountId,
-          subcategoryId: null,
-          notes: positiveAllocations.length ? `راتب ${month} - غير موزع` : `راتب ${month}`,
-        });
-      }
-
-      // Keep category budgets in sync with the allocations.
-      for (const alloc of allocsForBudget) {
-        await tx
-          .update(categoriesTable)
-          .set({ budget: alloc.amount })
-          .where(eq(categoriesTable.id, alloc.categoryId));
-      }
-    });
-  } catch (err) {
-    // Unique-violation on processedMonth means a concurrent call already
-    // processed this month; treat it as already processed rather than an error.
-    if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "23505") {
-      res.json({ processed: false, alreadyProcessed: true, message: `تم معالجة راتب ${month} مسبقاً` });
-      return;
+    // One categorized deposit per allocation so each shows up in the operations
+    // list, the account statement, and as "received" per subcategory.
+    for (const alloc of positiveAllocations) {
+      const label = alloc.subcategoryName ?? alloc.categoryName ?? "";
+      await tx.insert(transactionsTable).values({
+        type: "deposit",
+        amount: alloc.amount,
+        date: dateStr,
+        accountId,
+        subcategoryId: alloc.subcategoryId ?? null,
+        notes: `راتب ${month}${label ? ` - ${label}` : ""}`,
+      });
     }
-    throw err;
-  }
 
-  res.json({ processed: true, alreadyProcessed: false, message: `تم معالجة راتب ${month} وإيداعه في الحساب بنجاح` });
+    // One deposit per active loan so the debt portion is visible too.
+    for (const loan of activeLoans) {
+      if (!(parseFloat(loan.monthlyInstallment) > 0)) continue;
+      await tx.insert(transactionsTable).values({
+        type: "deposit",
+        amount: loan.monthlyInstallment,
+        date: dateStr,
+        accountId,
+        subcategoryId: null,
+        notes: `راتب ${month} - قسط ${loan.name}`,
+      });
+    }
+
+    // Deposit any unallocated remainder so the account balance equals the full
+    // salary. If nothing was committed, this is the entire salary.
+    if (remainder > 0.009) {
+      await tx.insert(transactionsTable).values({
+        type: "deposit",
+        amount: remainder.toFixed(2),
+        date: dateStr,
+        accountId,
+        subcategoryId: null,
+        notes: committedTotal > 0.009 ? `راتب ${month} - غير موزع` : `راتب ${month}`,
+      });
+    }
+
+    // Keep category budgets in sync with the allocations.
+    for (const alloc of allocsForBudget) {
+      await tx
+        .update(categoriesTable)
+        .set({ budget: alloc.amount })
+        .where(eq(categoriesTable.id, alloc.categoryId));
+    }
+
+    // Record the processing (idempotent — ignore if the month is already logged).
+    await tx.insert(salaryProcessingLogTable).values({ processedMonth: month }).onConflictDoNothing();
+  });
+
+  res.json({ processed: true, alreadyProcessed: false, message: `تم إيداع راتب ${month} كاملاً في الحساب وتوزيعه على التصنيفات والأقساط` });
 });
 
 export default router;

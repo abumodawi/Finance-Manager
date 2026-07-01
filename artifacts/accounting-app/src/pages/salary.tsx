@@ -13,6 +13,9 @@ import {
   getGetSalaryQueryKey,
   getListSalaryAllocationsQueryKey,
   getListCategoriesQueryKey,
+  getListAccountsQueryKey,
+  getListTransactionsQueryKey,
+  getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -131,6 +134,9 @@ export default function Salary() {
       onSuccess: (data) => {
         if (data.processed) {
           queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           toast({ title: data.message });
         } else {
           toast({ title: data.message, variant: data.alreadyProcessed ? "default" : "destructive" });
@@ -413,7 +419,7 @@ export default function Salary() {
           <CardHeader>
             <CardTitle>معالجة الراتب الشهري</CardTitle>
             <CardDescription>
-              عند الضغط سيتم إيداع الراتب في الحساب المحدد وتحديث ميزانية التصنيفات
+              عند الضغط سيتم إيداع الراتب كاملاً في الحساب المحدد موزعاً على التصنيفات والأقساط (الديون). يمكنك إعادة المعالجة في أي وقت لتحديث إيداعات الشهر.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
