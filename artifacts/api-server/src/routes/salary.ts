@@ -323,7 +323,7 @@ router.post("/salary/process", async (req, res): Promise<void> => {
     // add up) and can later be transferred to another account or spent from.
     // A global lock guards the find-or-create against races across months.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('salary-system-subcategories'))`);
-    const remainderSubId = await ensureSystemSubcategory(tx, "المتبقي من الراتب", "💰", "المتبقي", "💰");
+    const remainderSubId = await ensureSystemSubcategory(tx, "المتبقي من الراتب", "💰", "إدخال", "📥");
     const debtSubId = await ensureSystemSubcategory(tx, "الديون", "🏦", "الأقساط", "📄");
 
     // Remove ONLY the salary deposits previously created for this month. They
