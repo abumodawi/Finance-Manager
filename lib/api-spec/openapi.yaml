@@ -708,18 +708,22 @@ components:
       type: object
       required: [id, categoryId, amount]
       properties:
-        id:           { type: integer }
-        categoryId:   { type: integer }
-        categoryName: { type: string }
-        categoryEmoji: { type: string }
-        amount:       { type: number }
+        id:              { type: integer }
+        categoryId:      { type: integer }
+        categoryName:    { type: string }
+        categoryEmoji:   { type: string }
+        subcategoryId:   { type: ["integer", "null"] }
+        subcategoryName: { type: ["string", "null"] }
+        subcategoryEmoji: { type: ["string", "null"] }
+        amount:          { type: number }
 
     SalaryAllocationInput:
       type: object
       required: [categoryId, amount]
       properties:
-        categoryId: { type: integer }
-        amount:     { type: number, minimum: 0 }
+        categoryId:    { type: integer }
+        subcategoryId: { type: ["integer", "null"] }
+        amount:        { type: number, minimum: 0 }
 
     SalaryAllocationUpdate:
       type: object

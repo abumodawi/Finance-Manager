@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, salaryTable, accountsTable, salaryAllocationsTable, categoriesTable, transactionsTable, salaryProcessingLogTable } from "@workspace/db";
+import { db, salaryTable, accountsTable, salaryAllocationsTable, categoriesTable, subcategoriesTable, transactionsTable, salaryProcessingLogTable } from "@workspace/db";
 import {
   UpsertSalaryBody,
   CreateSalaryAllocationBody,
@@ -85,13 +85,25 @@ router.get("/salary/allocations", async (_req, res): Promise<void> => {
       categoryId: salaryAllocationsTable.categoryId,
       categoryName: categoriesTable.name,
       categoryEmoji: categoriesTable.emoji,
+      subcategoryId: salaryAllocationsTable.subcategoryId,
+      subcategoryName: subcategoriesTable.name,
+      subcategoryEmoji: subcategoriesTable.emoji,
       amount: salaryAllocationsTable.amount,
     })
     .from(salaryAllocationsTable)
     .innerJoin(categoriesTable, eq(salaryAllocationsTable.categoryId, categoriesTable.id))
+    .leftJoin(subcategoriesTable, eq(salaryAllocationsTable.subcategoryId, subcategoriesTable.id))
     .orderBy(salaryAllocationsTable.id);
 
-  res.json(rows.map((r) => ({ ...r, amount: parseFloat(r.amount) })));
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      subcategoryId: r.subcategoryId ?? null,
+      subcategoryName: r.subcategoryName ?? null,
+      subcategoryEmoji: r.subcategoryEmoji ?? null,
+      amount: parseFloat(r.amount),
+    }))
+  );
 });
 
 router.post("/salary/allocations", async (req, res): Promise<void> => {
@@ -100,17 +112,41 @@ router.post("/salary/allocations", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  if (parsed.data.subcategoryId != null) {
+    const [sub] = await db
+      .select()
+      .from(subcategoriesTable)
+      .where(eq(subcategoriesTable.id, parsed.data.subcategoryId));
+    if (!sub || sub.categoryId !== parsed.data.categoryId) {
+      res.status(400).json({ error: "Subcategory does not belong to the selected category" });
+      return;
+    }
+  }
   const [row] = await db
     .insert(salaryAllocationsTable)
-    .values({ categoryId: parsed.data.categoryId, amount: String(parsed.data.amount) })
+    .values({
+      categoryId: parsed.data.categoryId,
+      subcategoryId: parsed.data.subcategoryId ?? null,
+      amount: String(parsed.data.amount),
+    })
     .returning();
 
   const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, row.categoryId));
+  let subName: string | null = null;
+  let subEmoji: string | null = null;
+  if (row.subcategoryId) {
+    const [sub] = await db.select().from(subcategoriesTable).where(eq(subcategoriesTable.id, row.subcategoryId));
+    subName = sub?.name ?? null;
+    subEmoji = sub?.emoji ?? null;
+  }
   res.status(201).json({
     id: row.id,
     categoryId: row.categoryId,
     categoryName: cat?.name ?? "",
     categoryEmoji: cat?.emoji ?? "📂",
+    subcategoryId: row.subcategoryId ?? null,
+    subcategoryName: subName,
+    subcategoryEmoji: subEmoji,
     amount: parseFloat(row.amount),
   });
 });
@@ -136,11 +172,21 @@ router.patch("/salary/allocations/:id", async (req, res): Promise<void> => {
     return;
   }
   const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, row.categoryId));
+  let subName: string | null = null;
+  let subEmoji: string | null = null;
+  if (row.subcategoryId) {
+    const [sub] = await db.select().from(subcategoriesTable).where(eq(subcategoriesTable.id, row.subcategoryId));
+    subName = sub?.name ?? null;
+    subEmoji = sub?.emoji ?? null;
+  }
   res.json({
     id: row.id,
     categoryId: row.categoryId,
     categoryName: cat?.name ?? "",
     categoryEmoji: cat?.emoji ?? "📂",
+    subcategoryId: row.subcategoryId ?? null,
+    subcategoryName: subName,
+    subcategoryEmoji: subEmoji,
     amount: parseFloat(row.amount),
   });
 });

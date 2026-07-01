@@ -15,9 +15,9 @@ const navigation = [
   { name: "الحسابات", href: "/accounts", icon: WalletCards },
   { name: "المعاملات", href: "/transactions", icon: ArrowRightLeft },
   { name: "كشف الحساب", href: "/statement", icon: FileText },
-  { name: "التصنيفات", href: "/categories", icon: Tags },
   { name: "الراتب", href: "/salary", icon: Banknote },
   { name: "الديون", href: "/loans", icon: CreditCard },
+  { name: "التصنيفات", href: "/categories", icon: Tags },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

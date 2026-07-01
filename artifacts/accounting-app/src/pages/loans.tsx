@@ -21,19 +21,15 @@ import { Plus, Pencil, Trash2, CreditCard } from "lucide-react";
 type LoanForm = {
   name: string;
   totalAmount: string;
-  monthlyInstallment: string;
   months: string;
   startDate: string;
-  remainingMonths: string;
 };
 
 const EMPTY_FORM: LoanForm = {
   name: "",
   totalAmount: "",
-  monthlyInstallment: "",
   months: "",
   startDate: new Date().toISOString().slice(0, 10),
-  remainingMonths: "",
 };
 
 export default function Loans() {
@@ -51,6 +47,11 @@ export default function Loans() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListLoansQueryKey() });
 
+  // Auto-calculated monthly installment
+  const totalNum = parseFloat(form.totalAmount) || 0;
+  const monthsNum = parseInt(form.months) || 0;
+  const monthlyInstallment = monthsNum > 0 ? totalNum / monthsNum : 0;
+
   const openCreate = () => {
     setEditId(null);
     setForm(EMPTY_FORM);
@@ -62,10 +63,8 @@ export default function Loans() {
     setForm({
       name: loan.name,
       totalAmount: String(loan.totalAmount),
-      monthlyInstallment: String(loan.monthlyInstallment),
       months: String(loan.months),
       startDate: loan.startDate,
-      remainingMonths: String(loan.remainingMonths),
     });
     setIsOpen(true);
   };
@@ -73,7 +72,12 @@ export default function Loans() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const months = parseInt(form.months);
-    const remaining = form.remainingMonths ? parseInt(form.remainingMonths) : months;
+    const total = parseFloat(form.totalAmount);
+    if (!form.name || !total || !months) {
+      toast({ title: "يرجى تعبئة جميع الحقول", variant: "destructive" });
+      return;
+    }
+    const installment = months > 0 ? total / months : 0;
 
     if (editId !== null) {
       updateLoan.mutate(
@@ -81,10 +85,9 @@ export default function Loans() {
           id: editId,
           data: {
             name: form.name,
-            totalAmount: parseFloat(form.totalAmount),
-            monthlyInstallment: parseFloat(form.monthlyInstallment),
+            totalAmount: total,
+            monthlyInstallment: installment,
             months,
-            remainingMonths: remaining,
           },
         },
         {
@@ -93,6 +96,7 @@ export default function Loans() {
             setIsOpen(false);
             toast({ title: "تم تحديث الدين بنجاح" });
           },
+          onError: () => toast({ title: "حدث خطأ أثناء الحفظ", variant: "destructive" }),
         }
       );
     } else {
@@ -100,11 +104,10 @@ export default function Loans() {
         {
           data: {
             name: form.name,
-            totalAmount: parseFloat(form.totalAmount),
-            monthlyInstallment: parseFloat(form.monthlyInstallment),
+            totalAmount: total,
+            monthlyInstallment: installment,
             months,
             startDate: form.startDate,
-            remainingMonths: remaining,
           },
         },
         {
@@ -114,6 +117,7 @@ export default function Loans() {
             setForm(EMPTY_FORM);
             toast({ title: "تم إضافة الدين بنجاح" });
           },
+          onError: () => toast({ title: "حدث خطأ أثناء الإضافة", variant: "destructive" }),
         }
       );
     }
@@ -190,26 +194,7 @@ export default function Loans() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>القسط الشهري</Label>
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      required
-                      value={form.monthlyInstallment}
-                      onChange={(e) => setForm({ ...form, monthlyInstallment: e.target.value })}
-                      dir="ltr"
-                      className="text-right pr-10"
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ر.س</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>عدد الأشهر الإجمالي</Label>
+                  <Label>عدد الأشهر</Label>
                   <Input
                     type="number"
                     min="1"
@@ -220,21 +205,23 @@ export default function Loans() {
                     className="text-right"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>الأشهر المتبقية</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.remainingMonths}
-                    onChange={(e) => setForm({ ...form, remainingMonths: e.target.value })}
-                    placeholder="تلقائي"
-                    dir="ltr"
-                    className="text-right"
-                  />
-                </div>
               </div>
 
-              {editId === null && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>القسط الشهري</Label>
+                  <div className="relative">
+                    <Input
+                      readOnly
+                      tabIndex={-1}
+                      value={monthlyInstallment > 0 ? monthlyInstallment.toFixed(2) : ""}
+                      placeholder="تلقائي"
+                      dir="ltr"
+                      className="text-right pr-10 bg-muted font-bold text-orange-600"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ر.س</span>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label>تاريخ أول قسط</Label>
                   <Input
@@ -243,9 +230,14 @@ export default function Loans() {
                     value={form.startDate}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
                     dir="ltr"
+                    disabled={editId !== null}
                   />
                 </div>
-              )}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                يُحسب القسط الشهري تلقائياً: المبلغ الإجمالي ÷ عدد الأشهر
+              </p>
 
               <Button type="submit" className="w-full" disabled={createLoan.isPending || updateLoan.isPending}>
                 {editId !== null ? "حفظ التعديلات" : "إضافة الدين"}

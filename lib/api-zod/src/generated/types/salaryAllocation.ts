@@ -11,5 +11,11 @@ export interface SalaryAllocation {
   categoryId: number;
   categoryName?: string;
   categoryEmoji?: string;
+  /** @nullable */
+  subcategoryId?: number | null;
+  /** @nullable */
+  subcategoryName?: string | null;
+  /** @nullable */
+  subcategoryEmoji?: string | null;
   amount: number;
 }

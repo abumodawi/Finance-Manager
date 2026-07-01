@@ -1,11 +1,12 @@
 import { pgTable, serial, integer, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { categoriesTable } from "./categories";
+import { categoriesTable, subcategoriesTable } from "./categories";
 
 export const salaryAllocationsTable = pgTable("salary_allocations", {
   id: serial("id").primaryKey(),
   categoryId: integer("category_id").notNull().references(() => categoriesTable.id, { onDelete: "cascade" }),
+  subcategoryId: integer("subcategory_id").references(() => subcategoriesTable.id, { onDelete: "set null" }),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull().default("0"),
 });
 

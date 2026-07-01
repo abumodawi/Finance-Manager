@@ -43,7 +43,7 @@ export default function Salary() {
   const processSalary = useProcessSalary();
 
   const [salaryForm, setSalaryForm] = useState({ amount: 0, depositDay: 25, accountId: "" });
-  const [newAlloc, setNewAlloc] = useState({ categoryId: "", amount: "" });
+  const [newAlloc, setNewAlloc] = useState({ categoryId: "", subcategoryId: "", amount: "" });
   const [editAllocId, setEditAllocId] = useState<number | null>(null);
   const [editAllocAmount, setEditAllocAmount] = useState("");
 
@@ -86,13 +86,20 @@ export default function Salary() {
     e.preventDefault();
     if (!newAlloc.categoryId || !newAlloc.amount) return;
     createAllocation.mutate(
-      { data: { categoryId: parseInt(newAlloc.categoryId), amount: parseFloat(newAlloc.amount) } },
+      {
+        data: {
+          categoryId: parseInt(newAlloc.categoryId),
+          subcategoryId: newAlloc.subcategoryId ? parseInt(newAlloc.subcategoryId) : null,
+          amount: parseFloat(newAlloc.amount),
+        },
+      },
       {
         onSuccess: () => {
           invalidateSalary();
-          setNewAlloc({ categoryId: "", amount: "" });
+          setNewAlloc({ categoryId: "", subcategoryId: "", amount: "" });
           toast({ title: "تمت إضافة التوزيع" });
         },
+        onError: () => toast({ title: "حدث خطأ أثناء الإضافة", variant: "destructive" }),
       }
     );
   };
@@ -136,8 +143,7 @@ export default function Salary() {
   const totalLoanDeductions = activeLoans.reduce((s, l) => s + l.monthlyInstallment, 0);
   const remaining = (salary?.amount ?? 0) - totalAllocations - totalLoanDeductions;
 
-  const allocatedCategoryIds = new Set(allocations?.map((a) => a.categoryId) ?? []);
-  const availableCategories = categories?.filter((c) => !allocatedCategoryIds.has(c.id)) ?? [];
+  const selectedCatSubs = categories?.find((c) => String(c.id) === newAlloc.categoryId)?.subcategories ?? [];
 
   if (isLoading) {
     return (
@@ -227,8 +233,15 @@ export default function Salary() {
             <div className="space-y-2">
               {allocations.map((alloc) => (
                 <div key={alloc.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <span className="text-xl">{alloc.categoryEmoji}</span>
-                  <span className="flex-1 font-medium">{alloc.categoryName}</span>
+                  <span className="text-xl">{alloc.subcategoryEmoji ?? alloc.categoryEmoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium block truncate">
+                      {alloc.subcategoryName ?? alloc.categoryName}
+                    </span>
+                    {alloc.subcategoryName && (
+                      <span className="text-xs text-muted-foreground">{alloc.categoryName}</span>
+                    )}
+                  </div>
                   {editAllocId === alloc.id ? (
                     <div className="flex items-center gap-2">
                       <div className="relative w-28">
@@ -278,40 +291,64 @@ export default function Salary() {
           )}
 
           {/* Add new allocation */}
-          {availableCategories.length > 0 && (
-            <form onSubmit={handleAddAllocation} className="flex gap-2">
-              <Select value={newAlloc.categoryId} onValueChange={(v) => setNewAlloc({ ...newAlloc, categoryId: v })}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="اختر التصنيف" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCategories.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.emoji} {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="relative w-32">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="المبلغ"
-                  value={newAlloc.amount}
-                  onChange={(e) => setNewAlloc({ ...newAlloc, amount: e.target.value })}
-                  dir="ltr"
-                  className="text-right pr-10"
-                />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ر.س</span>
-              </div>
-              <Button type="submit" size="icon" disabled={createAllocation.isPending}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </form>
-          )}
+          {categories && categories.length > 0 ? (
+            <form onSubmit={handleAddAllocation} className="space-y-2 border-t pt-4">
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  value={newAlloc.categoryId}
+                  onValueChange={(v) => setNewAlloc({ ...newAlloc, categoryId: v, subcategoryId: "" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر التصنيف" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.emoji} {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-          {allocations?.length === 0 && availableCategories.length === 0 && (
+                <Select
+                  value={newAlloc.subcategoryId || "all"}
+                  onValueChange={(v) => setNewAlloc({ ...newAlloc, subcategoryId: v === "all" ? "" : v })}
+                  disabled={!selectedCatSubs || selectedCatSubs.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="التصنيف الفرعي (اختياري)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">التصنيف كامل</SelectItem>
+                    {selectedCatSubs?.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.emoji} {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="المبلغ الشهري"
+                    value={newAlloc.amount}
+                    onChange={(e) => setNewAlloc({ ...newAlloc, amount: e.target.value })}
+                    dir="ltr"
+                    className="text-right pr-10"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ر.س</span>
+                </div>
+                <Button type="submit" disabled={createAllocation.isPending || !newAlloc.categoryId || !newAlloc.amount}>
+                  <Plus className="h-4 w-4 ml-1" /> إضافة توزيع
+                </Button>
+              </div>
+            </form>
+          ) : (
             <p className="text-muted-foreground text-sm text-center py-2">لا توجد تصنيفات. أضف تصنيفات أولاً.</p>
           )}
         </CardContent>

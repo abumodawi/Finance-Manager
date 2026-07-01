@@ -8,6 +8,8 @@
 
 export interface SalaryAllocationInput {
   categoryId: number;
+  /** @nullable */
+  subcategoryId?: number | null;
   /** @minimum 0 */
   amount: number;
 }

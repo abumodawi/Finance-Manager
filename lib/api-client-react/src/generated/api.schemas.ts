@@ -139,11 +139,19 @@ export interface SalaryAllocation {
   categoryId: number;
   categoryName?: string;
   categoryEmoji?: string;
+  /** @nullable */
+  subcategoryId?: number | null;
+  /** @nullable */
+  subcategoryName?: string | null;
+  /** @nullable */
+  subcategoryEmoji?: string | null;
   amount: number;
 }
 
 export interface SalaryAllocationInput {
   categoryId: number;
+  /** @nullable */
+  subcategoryId?: number | null;
   /** @minimum 0 */
   amount: number;
 }

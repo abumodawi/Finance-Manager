@@ -327,6 +327,9 @@ export const ListSalaryAllocationsResponseItem = zod.object({
   "categoryId": zod.number(),
   "categoryName": zod.string().optional(),
   "categoryEmoji": zod.string().optional(),
+  "subcategoryId": zod.number().nullish(),
+  "subcategoryName": zod.string().nullish(),
+  "subcategoryEmoji": zod.string().nullish(),
   "amount": zod.number()
 })
 export const ListSalaryAllocationsResponse = zod.array(ListSalaryAllocationsResponseItem)
@@ -341,6 +344,7 @@ export const createSalaryAllocationBodyAmountMin = 0;
 
 export const CreateSalaryAllocationBody = zod.object({
   "categoryId": zod.number(),
+  "subcategoryId": zod.number().nullish(),
   "amount": zod.number().min(createSalaryAllocationBodyAmountMin)
 })
 
@@ -349,6 +353,9 @@ export const CreateSalaryAllocationResponse = zod.object({
   "categoryId": zod.number(),
   "categoryName": zod.string().optional(),
   "categoryEmoji": zod.string().optional(),
+  "subcategoryId": zod.number().nullish(),
+  "subcategoryName": zod.string().nullish(),
+  "subcategoryEmoji": zod.string().nullish(),
   "amount": zod.number()
 })
 
@@ -373,6 +380,9 @@ export const UpdateSalaryAllocationResponse = zod.object({
   "categoryId": zod.number(),
   "categoryName": zod.string().optional(),
   "categoryEmoji": zod.string().optional(),
+  "subcategoryId": zod.number().nullish(),
+  "subcategoryName": zod.string().nullish(),
+  "subcategoryEmoji": zod.string().nullish(),
   "amount": zod.number()
 })
 
