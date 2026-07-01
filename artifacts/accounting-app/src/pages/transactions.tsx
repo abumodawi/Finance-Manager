@@ -46,7 +46,7 @@ export default function Transactions() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.accountId) return alert("اختر الحساب");
-    if (formData.type === "expense" && formData.subcategoryId === "none") return alert("اختر التصنيف");
+    if (formData.subcategoryId === "none") return alert("اختر التصنيف");
 
     const payload = {
       type: formData.type,
@@ -150,28 +150,26 @@ export default function Transactions() {
                   </Select>
                 </div>
 
-                {formData.type === "expense" && (
-                  <div className="space-y-2">
-                    <Label>التصنيف</Label>
-                    <Select value={formData.subcategoryId} onValueChange={v => setFormData({...formData, subcategoryId: v})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر التصنيف..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories?.map(cat => (
-                          <div key={cat.id}>
-                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50">{cat.emoji} {cat.name}</div>
-                            {cat.subcategories?.map(sub => (
-                              <SelectItem key={sub.id} value={sub.id.toString()} className="pl-6">
-                                {sub.emoji} {sub.name}
-                              </SelectItem>
-                            ))}
-                          </div>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label>{formData.type === "expense" ? "تصنيف المصروف" : "تصنيف الإيداع"}</Label>
+                  <Select value={formData.subcategoryId} onValueChange={v => setFormData({...formData, subcategoryId: v})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر التصنيف..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories?.map(cat => (
+                        <div key={cat.id}>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50">{cat.emoji} {cat.name}</div>
+                          {cat.subcategories?.map(sub => (
+                            <SelectItem key={sub.id} value={sub.id.toString()} className="pl-6">
+                              {sub.emoji} {sub.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 <div className="space-y-2">
                   <Label>ملاحظات (اختياري)</Label>
@@ -201,7 +199,7 @@ export default function Transactions() {
                     </div>
                     <div>
                       <div className="font-semibold text-base">
-                        {tx.type === "expense" ? tx.subcategoryName : "إيداع"}
+                        {tx.subcategoryName ?? (tx.type === "expense" ? "مصروف" : "إيداع")}
                         {tx.notes && <span className="text-sm font-normal text-muted-foreground mr-2">({tx.notes})</span>}
                       </div>
                       <div className="text-sm text-muted-foreground">{formatDate(tx.date)}</div>
