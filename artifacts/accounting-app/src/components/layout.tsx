@@ -1,12 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  WalletCards, 
-  Tags, 
-  Banknote, 
-  ArrowRightLeft, 
-  FileText 
+import {
+  LayoutDashboard,
+  WalletCards,
+  Tags,
+  Banknote,
+  ArrowRightLeft,
+  FileText,
+  CreditCard,
 } from "lucide-react";
 
 const navigation = [
@@ -16,6 +17,7 @@ const navigation = [
   { name: "كشف الحساب", href: "/statement", icon: FileText },
   { name: "التصنيفات", href: "/categories", icon: Tags },
   { name: "الراتب", href: "/salary", icon: Banknote },
+  { name: "الديون", href: "/loans", icon: CreditCard },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -58,31 +60,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-xl font-bold text-primary">المحاسب الشخصي</h1>
         </div>
         <div className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="mx-auto max-w-5xl">
-            {children}
-          </div>
+          <div className="mx-auto max-w-5xl">{children}</div>
         </div>
-        
+
         {/* Mobile bottom nav */}
-        <nav className="md:hidden border-t border-border bg-card p-2 flex justify-around shrink-0 pb-safe">
-           {navigation.map((item) => {
-              const isActive = location === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex flex-col items-center gap-1 p-2 rounded-md text-[10px] font-medium",
-                    isActive
-                      ? "text-primary"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
+        <nav className="md:hidden border-t border-border bg-card p-2 flex justify-around shrink-0 pb-safe overflow-x-auto">
+          {navigation.map((item) => {
+            const isActive = location === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex flex-col items-center gap-1 p-2 rounded-md text-[10px] font-medium shrink-0",
+                  isActive ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
         </nav>
       </main>
     </div>

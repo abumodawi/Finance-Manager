@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
+  version: 0.2.0
   description: Accounting app API specification
 servers:
   - url: /api
@@ -15,7 +15,9 @@ tags:
   - name: categories
     description: Expense categories
   - name: salary
-    description: Salary configuration
+    description: Salary configuration and allocations
+  - name: loans
+    description: Debt / installment loans
   - name: transactions
     description: Financial transactions and statements
   - name: summary
@@ -27,7 +29,6 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -129,7 +130,13 @@ paths:
     get:
       operationId: listCategories
       tags: [categories]
-      summary: List all main categories with sub-categories
+      summary: List all main categories with sub-categories and balances
+      parameters:
+        - name: month
+          in: query
+          description: Month for balance calculation (YYYY-MM), defaults to current month
+          schema:
+            type: ["string", "null"]
       responses:
         "200":
           description: List of categories
@@ -281,6 +288,159 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Salary"
+
+  /salary/allocations:
+    get:
+      operationId: listSalaryAllocations
+      tags: [salary]
+      summary: List salary allocations per category
+      responses:
+        "200":
+          description: List of allocations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalaryAllocation"
+    post:
+      operationId: createSalaryAllocation
+      tags: [salary]
+      summary: Create a salary allocation for a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalaryAllocationInput"
+      responses:
+        "201":
+          description: Created allocation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalaryAllocation"
+
+  /salary/allocations/{id}:
+    patch:
+      operationId: updateSalaryAllocation
+      tags: [salary]
+      summary: Update a salary allocation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalaryAllocationUpdate"
+      responses:
+        "200":
+          description: Updated allocation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalaryAllocation"
+    delete:
+      operationId: deleteSalaryAllocation
+      tags: [salary]
+      summary: Delete a salary allocation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /salary/process:
+    post:
+      operationId: processSalary
+      tags: [salary]
+      summary: Process salary for the current month (creates deposit transaction and updates category budgets)
+      responses:
+        "200":
+          description: Process result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalaryProcessResult"
+
+  /loans:
+    get:
+      operationId: listLoans
+      tags: [loans]
+      summary: List all loans
+      responses:
+        "200":
+          description: List of loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Loan"
+    post:
+      operationId: createLoan
+      tags: [loans]
+      summary: Create a new loan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanInput"
+      responses:
+        "201":
+          description: Created loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+
+  /loans/{id}:
+    patch:
+      operationId: updateLoan
+      tags: [loans]
+      summary: Update a loan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanUpdate"
+      responses:
+        "200":
+          description: Updated loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+    delete:
+      operationId: deleteLoan
+      tags: [loans]
+      summary: Delete a loan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   /transactions:
     get:
@@ -436,24 +596,26 @@ components:
 
     Account:
       type: object
-      required: [id, name, bankName, accountNumber, emoji, balance, createdAt]
+      required: [id, name, bankName, accountNumber, balance, createdAt]
       properties:
-        id:        { type: integer }
-        name:      { type: string }
-        bankName:  { type: string }
+        id:            { type: integer }
+        name:          { type: string }
+        bankName:      { type: string }
         accountNumber: { type: string }
-        emoji:     { type: string, description: "Emoji/sticker representing the account" }
-        balance:   { type: number, description: "Current calculated balance" }
-        createdAt: { type: string, format: date-time }
+        emoji:         { type: string }
+        imageUrl:      { type: ["string", "null"] }
+        balance:       { type: number }
+        createdAt:     { type: string, format: date-time }
 
     AccountInput:
       type: object
-      required: [name, bankName, accountNumber, emoji]
+      required: [name, bankName, accountNumber]
       properties:
-        name:          { type: string, minLength: 1 }
-        bankName:      { type: string, minLength: 1 }
-        accountNumber: { type: string, minLength: 1 }
-        emoji:         { type: string, minLength: 1 }
+        name:           { type: string, minLength: 1 }
+        bankName:       { type: string, minLength: 1 }
+        accountNumber:  { type: string, minLength: 1 }
+        emoji:          { type: string }
+        imageUrl:       { type: ["string", "null"] }
         initialBalance: { type: number, default: 0 }
 
     AccountUpdate:
@@ -462,15 +624,20 @@ components:
         name:          { type: string, minLength: 1 }
         bankName:      { type: string, minLength: 1 }
         accountNumber: { type: string, minLength: 1 }
-        emoji:         { type: string, minLength: 1 }
+        emoji:         { type: string }
+        imageUrl:      { type: ["string", "null"] }
 
     Category:
       type: object
       required: [id, name, emoji, subcategories]
       properties:
-        id:            { type: integer }
-        name:          { type: string }
-        emoji:         { type: string }
+        id:             { type: integer }
+        name:           { type: string }
+        emoji:          { type: string }
+        budget:         { type: ["number", "null"] }
+        currentBalance: { type: ["number", "null"], description: "budget minus expenses plus deposits this month" }
+        accountId:      { type: ["integer", "null"] }
+        accountName:    { type: ["string", "null"] }
         subcategories:
           type: array
           items:
@@ -480,14 +647,18 @@ components:
       type: object
       required: [name, emoji]
       properties:
-        name:  { type: string, minLength: 1 }
-        emoji: { type: string, minLength: 1 }
+        name:      { type: string, minLength: 1 }
+        emoji:     { type: string, minLength: 1 }
+        budget:    { type: ["number", "null"] }
+        accountId: { type: ["integer", "null"] }
 
     CategoryUpdate:
       type: object
       properties:
-        name:  { type: string, minLength: 1 }
-        emoji: { type: string, minLength: 1 }
+        name:      { type: string, minLength: 1 }
+        emoji:     { type: string, minLength: 1 }
+        budget:    { type: ["number", "null"] }
+        accountId: { type: ["integer", "null"] }
 
     Subcategory:
       type: object
@@ -518,7 +689,9 @@ components:
       properties:
         id:          { type: integer }
         amount:      { type: number }
-        depositDay:  { type: integer, description: "Day of month the salary is deposited (1-31)" }
+        depositDay:  { type: integer }
+        accountId:   { type: ["integer", "null"] }
+        accountName: { type: ["string", "null"] }
         notes:       { type: ["string", "null"] }
         updatedAt:   { type: string, format: date-time }
 
@@ -528,22 +701,88 @@ components:
       properties:
         amount:     { type: number, minimum: 0 }
         depositDay: { type: integer, minimum: 1, maximum: 31 }
+        accountId:  { type: ["integer", "null"] }
         notes:      { type: string }
+
+    SalaryAllocation:
+      type: object
+      required: [id, categoryId, amount]
+      properties:
+        id:           { type: integer }
+        categoryId:   { type: integer }
+        categoryName: { type: string }
+        categoryEmoji: { type: string }
+        amount:       { type: number }
+
+    SalaryAllocationInput:
+      type: object
+      required: [categoryId, amount]
+      properties:
+        categoryId: { type: integer }
+        amount:     { type: number, minimum: 0 }
+
+    SalaryAllocationUpdate:
+      type: object
+      properties:
+        amount: { type: number, minimum: 0 }
+
+    SalaryProcessResult:
+      type: object
+      required: [processed, message]
+      properties:
+        processed:        { type: boolean }
+        alreadyProcessed: { type: boolean }
+        message:          { type: string }
+
+    Loan:
+      type: object
+      required: [id, name, totalAmount, monthlyInstallment, months, startDate, remainingMonths, isActive, createdAt]
+      properties:
+        id:                 { type: integer }
+        name:               { type: string }
+        totalAmount:        { type: number }
+        monthlyInstallment: { type: number }
+        months:             { type: integer }
+        startDate:          { type: string, format: date }
+        remainingMonths:    { type: integer }
+        isActive:           { type: boolean }
+        createdAt:          { type: string, format: date-time }
+
+    LoanInput:
+      type: object
+      required: [name, totalAmount, monthlyInstallment, months, startDate]
+      properties:
+        name:               { type: string, minLength: 1 }
+        totalAmount:        { type: number, minimum: 0 }
+        monthlyInstallment: { type: number, minimum: 0 }
+        months:             { type: integer, minimum: 1 }
+        startDate:          { type: string, format: date }
+        remainingMonths:    { type: integer, minimum: 0 }
+
+    LoanUpdate:
+      type: object
+      properties:
+        name:               { type: string, minLength: 1 }
+        totalAmount:        { type: number, minimum: 0 }
+        monthlyInstallment: { type: number, minimum: 0 }
+        months:             { type: integer, minimum: 1 }
+        remainingMonths:    { type: integer, minimum: 0 }
+        isActive:           { type: boolean }
 
     Transaction:
       type: object
       required: [id, type, amount, date, accountId, createdAt]
       properties:
-        id:            { type: integer }
-        type:          { type: string, enum: [expense, deposit] }
-        amount:        { type: number }
-        date:          { type: string, format: date }
-        accountId:     { type: integer }
-        subcategoryId: { type: ["integer", "null"] }
+        id:              { type: integer }
+        type:            { type: string, enum: [expense, deposit] }
+        amount:          { type: number }
+        date:            { type: string, format: date }
+        accountId:       { type: integer }
+        subcategoryId:   { type: ["integer", "null"] }
         subcategoryName: { type: ["string", "null"] }
-        categoryName:  { type: ["string", "null"] }
-        notes:         { type: ["string", "null"] }
-        createdAt:     { type: string, format: date-time }
+        categoryName:    { type: ["string", "null"] }
+        notes:           { type: ["string", "null"] }
+        createdAt:       { type: string, format: date-time }
 
     TransactionInput:
       type: object
@@ -570,12 +809,12 @@ components:
       type: object
       required: [totalBalance, monthlyExpenses, monthlyDeposits, salary, accountBalances, currentMonth]
       properties:
-        totalBalance:      { type: number }
-        monthlyExpenses:   { type: number }
-        monthlyDeposits:   { type: number }
-        salary:            { type: ["number", "null"] }
-        depositDay:        { type: ["integer", "null"] }
-        currentMonth:      { type: string }
+        totalBalance:    { type: number }
+        monthlyExpenses: { type: number }
+        monthlyDeposits: { type: number }
+        salary:          { type: ["number", "null"] }
+        depositDay:      { type: ["integer", "null"] }
+        currentMonth:    { type: string }
         accountBalances:
           type: array
           items:
@@ -583,13 +822,14 @@ components:
 
     AccountBalance:
       type: object
-      required: [accountId, name, emoji, bankName, balance]
+      required: [accountId, name, bankName, balance]
       properties:
-        accountId: { type: integer }
-        name:      { type: string }
-        emoji:     { type: string }
-        bankName:  { type: string }
-        balance:   { type: number }
+        accountId:  { type: integer }
+        name:       { type: string }
+        emoji:      { type: string }
+        imageUrl:   { type: ["string", "null"] }
+        bankName:   { type: string }
+        balance:    { type: number }
 
     CategorySpending:
       type: object
@@ -617,9 +857,9 @@ components:
       type: object
       required: [account, openingBalance, closingBalance, transactions]
       properties:
-        account:         { $ref: "#/components/schemas/Account" }
-        openingBalance:  { type: number }
-        closingBalance:  { type: number }
+        account:        { $ref: "#/components/schemas/Account" }
+        openingBalance: { type: number }
+        closingBalance: { type: number }
         transactions:
           type: array
           items:

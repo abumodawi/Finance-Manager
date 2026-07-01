@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export interface CategoryInput {
@@ -11,4 +11,8 @@ export interface CategoryInput {
   name: string;
   /** @minLength 1 */
   emoji: string;
+  /** @nullable */
+  budget?: number | null;
+  /** @nullable */
+  accountId?: number | null;
 }

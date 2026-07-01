@@ -4,13 +4,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
 
-// Pages
 import Dashboard from "@/pages/dashboard";
 import Accounts from "@/pages/accounts";
 import Transactions from "@/pages/transactions";
 import Statement from "@/pages/statement";
 import Categories from "@/pages/categories";
 import Salary from "@/pages/salary";
+import Loans from "@/pages/loans";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -25,6 +25,7 @@ function Router() {
         <Route path="/statement" component={Statement} />
         <Route path="/categories" component={Categories} />
         <Route path="/salary" component={Salary} />
+        <Route path="/loans" component={Loans} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

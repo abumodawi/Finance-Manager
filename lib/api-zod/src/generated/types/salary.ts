@@ -3,14 +3,17 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export interface Salary {
   id: number;
   amount: number;
-  /** Day of month the salary is deposited (1-31) */
   depositDay: number;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
   /** @nullable */
   notes?: string | null;
   updatedAt: Date;

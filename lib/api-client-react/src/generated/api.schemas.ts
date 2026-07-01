@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
@@ -14,9 +14,9 @@ export interface Account {
   name: string;
   bankName: string;
   accountNumber: string;
-  /** Emoji/sticker representing the account */
-  emoji: string;
-  /** Current calculated balance */
+  emoji?: string;
+  /** @nullable */
+  imageUrl?: string | null;
   balance: number;
   createdAt: string;
 }
@@ -28,8 +28,9 @@ export interface AccountInput {
   bankName: string;
   /** @minLength 1 */
   accountNumber: string;
-  /** @minLength 1 */
-  emoji: string;
+  emoji?: string;
+  /** @nullable */
+  imageUrl?: string | null;
   initialBalance?: number;
 }
 
@@ -40,8 +41,9 @@ export interface AccountUpdate {
   bankName?: string;
   /** @minLength 1 */
   accountNumber?: string;
-  /** @minLength 1 */
   emoji?: string;
+  /** @nullable */
+  imageUrl?: string | null;
 }
 
 export interface Subcategory {
@@ -55,6 +57,17 @@ export interface Category {
   id: number;
   name: string;
   emoji: string;
+  /** @nullable */
+  budget?: number | null;
+  /**
+     * budget minus expenses plus deposits this month
+     * @nullable
+     */
+  currentBalance?: number | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
   subcategories: Subcategory[];
 }
 
@@ -63,6 +76,10 @@ export interface CategoryInput {
   name: string;
   /** @minLength 1 */
   emoji: string;
+  /** @nullable */
+  budget?: number | null;
+  /** @nullable */
+  accountId?: number | null;
 }
 
 export interface CategoryUpdate {
@@ -70,6 +87,10 @@ export interface CategoryUpdate {
   name?: string;
   /** @minLength 1 */
   emoji?: string;
+  /** @nullable */
+  budget?: number | null;
+  /** @nullable */
+  accountId?: number | null;
 }
 
 export interface SubcategoryInput {
@@ -90,8 +111,11 @@ export interface SubcategoryUpdate {
 export interface Salary {
   id: number;
   amount: number;
-  /** Day of month the salary is deposited (1-31) */
   depositDay: number;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
   /** @nullable */
   notes?: string | null;
   updatedAt: string;
@@ -105,7 +129,74 @@ export interface SalaryInput {
      * @maximum 31
      */
   depositDay: number;
+  /** @nullable */
+  accountId?: number | null;
   notes?: string;
+}
+
+export interface SalaryAllocation {
+  id: number;
+  categoryId: number;
+  categoryName?: string;
+  categoryEmoji?: string;
+  amount: number;
+}
+
+export interface SalaryAllocationInput {
+  categoryId: number;
+  /** @minimum 0 */
+  amount: number;
+}
+
+export interface SalaryAllocationUpdate {
+  /** @minimum 0 */
+  amount?: number;
+}
+
+export interface SalaryProcessResult {
+  processed: boolean;
+  alreadyProcessed?: boolean;
+  message: string;
+}
+
+export interface Loan {
+  id: number;
+  name: string;
+  totalAmount: number;
+  monthlyInstallment: number;
+  months: number;
+  startDate: string;
+  remainingMonths: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface LoanInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 0 */
+  totalAmount: number;
+  /** @minimum 0 */
+  monthlyInstallment: number;
+  /** @minimum 1 */
+  months: number;
+  startDate: string;
+  /** @minimum 0 */
+  remainingMonths?: number;
+}
+
+export interface LoanUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @minimum 0 */
+  totalAmount?: number;
+  /** @minimum 0 */
+  monthlyInstallment?: number;
+  /** @minimum 1 */
+  months?: number;
+  /** @minimum 0 */
+  remainingMonths?: number;
+  isActive?: boolean;
 }
 
 export type TransactionType = typeof TransactionType[keyof typeof TransactionType];
@@ -176,7 +267,9 @@ export interface TransactionUpdate {
 export interface AccountBalance {
   accountId: number;
   name: string;
-  emoji: string;
+  emoji?: string;
+  /** @nullable */
+  imageUrl?: string | null;
   bankName: string;
   balance: number;
 }
@@ -236,6 +329,14 @@ export interface AccountStatement {
   closingBalance: number;
   transactions: StatementEntry[];
 }
+
+export type ListCategoriesParams = {
+/**
+ * Month for balance calculation (YYYY-MM), defaults to current month
+ * @nullable
+ */
+month?: string | null;
+};
 
 export type ListTransactionsParams = {
 /**

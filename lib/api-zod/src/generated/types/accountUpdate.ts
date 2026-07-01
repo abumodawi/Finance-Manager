@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export interface AccountUpdate {
@@ -13,6 +13,7 @@ export interface AccountUpdate {
   bankName?: string;
   /** @minLength 1 */
   accountNumber?: string;
-  /** @minLength 1 */
   emoji?: string;
+  /** @nullable */
+  imageUrl?: string | null;
 }

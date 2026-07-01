@@ -8,6 +8,7 @@ export const accountsTable = pgTable("accounts", {
   bankName: text("bank_name").notNull(),
   accountNumber: text("account_number").notNull(),
   emoji: text("emoji").notNull().default("🏦"),
+  imageUrl: text("image_url"),
   initialBalance: numeric("initial_balance", { precision: 15, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

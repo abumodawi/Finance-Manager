@@ -22,18 +22,23 @@ async function computeBalance(accountId: number, initialBalance: string): Promis
   return parseFloat(initialBalance) + txTotal;
 }
 
+function formatAccount(a: typeof accountsTable.$inferSelect, balance: number) {
+  return {
+    id: a.id,
+    name: a.name,
+    bankName: a.bankName,
+    accountNumber: a.accountNumber,
+    emoji: a.emoji,
+    imageUrl: a.imageUrl ?? null,
+    balance,
+    createdAt: a.createdAt.toISOString(),
+  };
+}
+
 router.get("/accounts", async (_req, res): Promise<void> => {
   const accounts = await db.select().from(accountsTable).orderBy(accountsTable.createdAt);
   const withBalances = await Promise.all(
-    accounts.map(async (a) => ({
-      id: a.id,
-      name: a.name,
-      bankName: a.bankName,
-      accountNumber: a.accountNumber,
-      emoji: a.emoji,
-      balance: await computeBalance(a.id, a.initialBalance),
-      createdAt: a.createdAt.toISOString(),
-    }))
+    accounts.map(async (a) => formatAccount(a, await computeBalance(a.id, a.initialBalance)))
   );
   res.json(withBalances);
 });
@@ -49,15 +54,7 @@ router.post("/accounts", async (req, res): Promise<void> => {
     .insert(accountsTable)
     .values({ ...rest, initialBalance: String(initialBalance ?? 0) })
     .returning();
-  res.status(201).json({
-    id: account.id,
-    name: account.name,
-    bankName: account.bankName,
-    accountNumber: account.accountNumber,
-    emoji: account.emoji,
-    balance: parseFloat(account.initialBalance),
-    createdAt: account.createdAt.toISOString(),
-  });
+  res.status(201).json(formatAccount(account, parseFloat(account.initialBalance)));
 });
 
 router.get("/accounts/:id", async (req, res): Promise<void> => {
@@ -71,15 +68,7 @@ router.get("/accounts/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Account not found" });
     return;
   }
-  res.json({
-    id: account.id,
-    name: account.name,
-    bankName: account.bankName,
-    accountNumber: account.accountNumber,
-    emoji: account.emoji,
-    balance: await computeBalance(account.id, account.initialBalance),
-    createdAt: account.createdAt.toISOString(),
-  });
+  res.json(formatAccount(account, await computeBalance(account.id, account.initialBalance)));
 });
 
 router.patch("/accounts/:id", async (req, res): Promise<void> => {
@@ -102,15 +91,7 @@ router.patch("/accounts/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Account not found" });
     return;
   }
-  res.json({
-    id: account.id,
-    name: account.name,
-    bankName: account.bankName,
-    accountNumber: account.accountNumber,
-    emoji: account.emoji,
-    balance: await computeBalance(account.id, account.initialBalance),
-    createdAt: account.createdAt.toISOString(),
-  });
+  res.json(formatAccount(account, await computeBalance(account.id, account.initialBalance)));
 });
 
 router.delete("/accounts/:id", async (req, res): Promise<void> => {

@@ -3,13 +3,15 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export interface AccountBalance {
   accountId: number;
   name: string;
-  emoji: string;
+  emoji?: string;
+  /** @nullable */
+  imageUrl?: string | null;
   bankName: string;
   balance: number;
 }

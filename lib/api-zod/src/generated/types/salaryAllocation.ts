@@ -6,9 +6,10 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export interface SubcategoryUpdate {
-  /** @minLength 1 */
-  name?: string;
-  /** @minLength 1 */
-  emoji?: string;
+export interface SalaryAllocation {
+  id: number;
+  categoryId: number;
+  categoryName?: string;
+  categoryEmoji?: string;
+  amount: number;
 }

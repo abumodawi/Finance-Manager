@@ -3,13 +3,12 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from 'zod';
 
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -25,8 +24,9 @@ export const ListAccountsResponseItem = zod.object({
   "name": zod.string(),
   "bankName": zod.string(),
   "accountNumber": zod.string(),
-  "emoji": zod.string().describe('Emoji\/sticker representing the account'),
-  "balance": zod.number().describe('Current calculated balance'),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
+  "balance": zod.number(),
   "createdAt": zod.coerce.date()
 })
 export const ListAccountsResponse = zod.array(ListAccountsResponseItem)
@@ -38,14 +38,14 @@ export const ListAccountsResponse = zod.array(ListAccountsResponseItem)
 
 
 
-
 export const createAccountBodyInitialBalanceDefault = 0;
 
 export const CreateAccountBody = zod.object({
   "name": zod.string().min(1),
   "bankName": zod.string().min(1),
   "accountNumber": zod.string().min(1),
-  "emoji": zod.string().min(1),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
   "initialBalance": zod.number().default(createAccountBodyInitialBalanceDefault)
 })
 
@@ -54,8 +54,9 @@ export const CreateAccountResponse = zod.object({
   "name": zod.string(),
   "bankName": zod.string(),
   "accountNumber": zod.string(),
-  "emoji": zod.string().describe('Emoji\/sticker representing the account'),
-  "balance": zod.number().describe('Current calculated balance'),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
+  "balance": zod.number(),
   "createdAt": zod.coerce.date()
 })
 
@@ -72,8 +73,9 @@ export const GetAccountResponse = zod.object({
   "name": zod.string(),
   "bankName": zod.string(),
   "accountNumber": zod.string(),
-  "emoji": zod.string().describe('Emoji\/sticker representing the account'),
-  "balance": zod.number().describe('Current calculated balance'),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
+  "balance": zod.number(),
   "createdAt": zod.coerce.date()
 })
 
@@ -90,12 +92,12 @@ export const UpdateAccountParams = zod.object({
 
 
 
-
 export const UpdateAccountBody = zod.object({
   "name": zod.string().min(1).optional(),
   "bankName": zod.string().min(1).optional(),
   "accountNumber": zod.string().min(1).optional(),
-  "emoji": zod.string().min(1).optional()
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish()
 })
 
 export const UpdateAccountResponse = zod.object({
@@ -103,8 +105,9 @@ export const UpdateAccountResponse = zod.object({
   "name": zod.string(),
   "bankName": zod.string(),
   "accountNumber": zod.string(),
-  "emoji": zod.string().describe('Emoji\/sticker representing the account'),
-  "balance": zod.number().describe('Current calculated balance'),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
+  "balance": zod.number(),
   "createdAt": zod.coerce.date()
 })
 
@@ -120,12 +123,20 @@ export const DeleteAccountResponse = zod.void()
 
 
 /**
- * @summary List all main categories with sub-categories
+ * @summary List all main categories with sub-categories and balances
  */
+export const ListCategoriesQueryParams = zod.object({
+  "month": zod.coerce.string().nullish().describe('Month for balance calculation (YYYY-MM), defaults to current month')
+})
+
 export const ListCategoriesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "emoji": zod.string(),
+  "budget": zod.number().nullish(),
+  "currentBalance": zod.number().nullish().describe('budget minus expenses plus deposits this month'),
+  "accountId": zod.number().nullish(),
+  "accountName": zod.string().nullish(),
   "subcategories": zod.array(zod.object({
   "id": zod.number(),
   "categoryId": zod.number(),
@@ -145,13 +156,19 @@ export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
 
 export const CreateCategoryBody = zod.object({
   "name": zod.string().min(1),
-  "emoji": zod.string().min(1)
+  "emoji": zod.string().min(1),
+  "budget": zod.number().nullish(),
+  "accountId": zod.number().nullish()
 })
 
 export const CreateCategoryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "emoji": zod.string(),
+  "budget": zod.number().nullish(),
+  "currentBalance": zod.number().nullish().describe('budget minus expenses plus deposits this month'),
+  "accountId": zod.number().nullish(),
+  "accountName": zod.string().nullish(),
   "subcategories": zod.array(zod.object({
   "id": zod.number(),
   "categoryId": zod.number(),
@@ -174,13 +191,19 @@ export const UpdateCategoryParams = zod.object({
 
 export const UpdateCategoryBody = zod.object({
   "name": zod.string().min(1).optional(),
-  "emoji": zod.string().min(1).optional()
+  "emoji": zod.string().min(1).optional(),
+  "budget": zod.number().nullish(),
+  "accountId": zod.number().nullish()
 })
 
 export const UpdateCategoryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "emoji": zod.string(),
+  "budget": zod.number().nullish(),
+  "currentBalance": zod.number().nullish().describe('budget minus expenses plus deposits this month'),
+  "accountId": zod.number().nullish(),
+  "accountName": zod.string().nullish(),
   "subcategories": zod.array(zod.object({
   "id": zod.number(),
   "categoryId": zod.number(),
@@ -261,7 +284,9 @@ export const DeleteSubcategoryResponse = zod.void()
 export const GetSalaryResponse = zod.object({
   "id": zod.number(),
   "amount": zod.number(),
-  "depositDay": zod.number().describe('Day of month the salary is deposited (1-31)'),
+  "depositDay": zod.number(),
+  "accountId": zod.number().nullish(),
+  "accountName": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
 })
@@ -279,16 +304,198 @@ export const upsertSalaryBodyDepositDayMax = 31;
 export const UpsertSalaryBody = zod.object({
   "amount": zod.number().min(upsertSalaryBodyAmountMin),
   "depositDay": zod.number().min(1).max(upsertSalaryBodyDepositDayMax),
+  "accountId": zod.number().nullish(),
   "notes": zod.string().optional()
 })
 
 export const UpsertSalaryResponse = zod.object({
   "id": zod.number(),
   "amount": zod.number(),
-  "depositDay": zod.number().describe('Day of month the salary is deposited (1-31)'),
+  "depositDay": zod.number(),
+  "accountId": zod.number().nullish(),
+  "accountName": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "updatedAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary List salary allocations per category
+ */
+export const ListSalaryAllocationsResponseItem = zod.object({
+  "id": zod.number(),
+  "categoryId": zod.number(),
+  "categoryName": zod.string().optional(),
+  "categoryEmoji": zod.string().optional(),
+  "amount": zod.number()
+})
+export const ListSalaryAllocationsResponse = zod.array(ListSalaryAllocationsResponseItem)
+
+
+/**
+ * @summary Create a salary allocation for a category
+ */
+export const createSalaryAllocationBodyAmountMin = 0;
+
+
+
+export const CreateSalaryAllocationBody = zod.object({
+  "categoryId": zod.number(),
+  "amount": zod.number().min(createSalaryAllocationBodyAmountMin)
+})
+
+export const CreateSalaryAllocationResponse = zod.object({
+  "id": zod.number(),
+  "categoryId": zod.number(),
+  "categoryName": zod.string().optional(),
+  "categoryEmoji": zod.string().optional(),
+  "amount": zod.number()
+})
+
+
+/**
+ * @summary Update a salary allocation
+ */
+export const UpdateSalaryAllocationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateSalaryAllocationBodyAmountMin = 0;
+
+
+
+export const UpdateSalaryAllocationBody = zod.object({
+  "amount": zod.number().min(updateSalaryAllocationBodyAmountMin).optional()
+})
+
+export const UpdateSalaryAllocationResponse = zod.object({
+  "id": zod.number(),
+  "categoryId": zod.number(),
+  "categoryName": zod.string().optional(),
+  "categoryEmoji": zod.string().optional(),
+  "amount": zod.number()
+})
+
+
+/**
+ * @summary Delete a salary allocation
+ */
+export const DeleteSalaryAllocationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteSalaryAllocationResponse = zod.void()
+
+
+/**
+ * @summary Process salary for the current month (creates deposit transaction and updates category budgets)
+ */
+export const ProcessSalaryResponse = zod.object({
+  "processed": zod.boolean(),
+  "alreadyProcessed": zod.boolean().optional(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary List all loans
+ */
+export const ListLoansResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "totalAmount": zod.number(),
+  "monthlyInstallment": zod.number(),
+  "months": zod.number(),
+  "startDate": zod.coerce.date(),
+  "remainingMonths": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListLoansResponse = zod.array(ListLoansResponseItem)
+
+
+/**
+ * @summary Create a new loan
+ */
+
+export const createLoanBodyTotalAmountMin = 0;
+
+export const createLoanBodyMonthlyInstallmentMin = 0;
+
+
+export const createLoanBodyRemainingMonthsMin = 0;
+
+
+
+export const CreateLoanBody = zod.object({
+  "name": zod.string().min(1),
+  "totalAmount": zod.number().min(createLoanBodyTotalAmountMin),
+  "monthlyInstallment": zod.number().min(createLoanBodyMonthlyInstallmentMin),
+  "months": zod.number().min(1),
+  "startDate": zod.coerce.date(),
+  "remainingMonths": zod.number().min(createLoanBodyRemainingMonthsMin).optional()
+})
+
+export const CreateLoanResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "totalAmount": zod.number(),
+  "monthlyInstallment": zod.number(),
+  "months": zod.number(),
+  "startDate": zod.coerce.date(),
+  "remainingMonths": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a loan
+ */
+export const UpdateLoanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const updateLoanBodyTotalAmountMin = 0;
+
+export const updateLoanBodyMonthlyInstallmentMin = 0;
+
+
+export const updateLoanBodyRemainingMonthsMin = 0;
+
+
+
+export const UpdateLoanBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "totalAmount": zod.number().min(updateLoanBodyTotalAmountMin).optional(),
+  "monthlyInstallment": zod.number().min(updateLoanBodyMonthlyInstallmentMin).optional(),
+  "months": zod.number().min(1).optional(),
+  "remainingMonths": zod.number().min(updateLoanBodyRemainingMonthsMin).optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateLoanResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "totalAmount": zod.number(),
+  "monthlyInstallment": zod.number(),
+  "months": zod.number(),
+  "startDate": zod.coerce.date(),
+  "remainingMonths": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a loan
+ */
+export const DeleteLoanParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteLoanResponse = zod.void()
 
 
 /**
@@ -402,7 +609,8 @@ export const GetDashboardSummaryResponse = zod.object({
   "accountBalances": zod.array(zod.object({
   "accountId": zod.number(),
   "name": zod.string(),
-  "emoji": zod.string(),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
   "bankName": zod.string(),
   "balance": zod.number()
 }))
@@ -445,8 +653,9 @@ export const GetAccountStatementResponse = zod.object({
   "name": zod.string(),
   "bankName": zod.string(),
   "accountNumber": zod.string(),
-  "emoji": zod.string().describe('Emoji\/sticker representing the account'),
-  "balance": zod.number().describe('Current calculated balance'),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
+  "balance": zod.number(),
   "createdAt": zod.coerce.date()
 }),
   "openingBalance": zod.number(),

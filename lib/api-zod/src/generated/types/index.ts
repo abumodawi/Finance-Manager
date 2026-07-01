@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export * from './account';
@@ -19,10 +19,18 @@ export * from './dashboardSummary';
 export * from './getAccountStatementParams';
 export * from './getSpendingByCategoryParams';
 export * from './healthStatus';
+export * from './listCategoriesParams';
 export * from './listTransactionsParams';
 export * from './listTransactionsType';
+export * from './loan';
+export * from './loanInput';
+export * from './loanUpdate';
 export * from './salary';
+export * from './salaryAllocation';
+export * from './salaryAllocationInput';
+export * from './salaryAllocationUpdate';
 export * from './salaryInput';
+export * from './salaryProcessResult';
 export * from './statementEntry';
 export * from './statementEntryType';
 export * from './subcategory';

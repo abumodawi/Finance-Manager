@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Accounting app API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import type { Subcategory } from './subcategory';
 
@@ -11,5 +11,16 @@ export interface Category {
   id: number;
   name: string;
   emoji: string;
+  /** @nullable */
+  budget?: number | null;
+  /**
+     * budget minus expenses plus deposits this month
+     * @nullable
+     */
+  currentBalance?: number | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
   subcategories: Subcategory[];
 }

@@ -6,9 +6,9 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export type GetSpendingByCategoryParams = {
+export type ListCategoriesParams = {
 /**
- * Month to summarize (YYYY-MM), defaults to current month
+ * Month for balance calculation (YYYY-MM), defaults to current month
  * @nullable
  */
 month?: string | null;

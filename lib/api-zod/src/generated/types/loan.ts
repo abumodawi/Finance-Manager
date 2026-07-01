@@ -6,14 +6,14 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export interface Account {
+export interface Loan {
   id: number;
   name: string;
-  bankName: string;
-  accountNumber: string;
-  emoji?: string;
-  /** @nullable */
-  imageUrl?: string | null;
-  balance: number;
+  totalAmount: number;
+  monthlyInstallment: number;
+  months: number;
+  startDate: Date;
+  remainingMonths: number;
+  isActive: boolean;
   createdAt: Date;
 }
