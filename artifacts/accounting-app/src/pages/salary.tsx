@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -88,7 +88,7 @@ export default function Salary() {
 
   const handleAddAllocation = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAlloc.categoryId || !newAlloc.amount) return;
+    if (!newAlloc.subcategoryId || !newAlloc.categoryId || !newAlloc.amount) return;
     createAllocation.mutate(
       {
         data: {
@@ -149,8 +149,7 @@ export default function Salary() {
   const totalAllocations = allocations?.reduce((s, a) => s + a.amount, 0) ?? 0;
   const totalLoanDeductions = activeLoans.reduce((s, l) => s + l.monthlyInstallment, 0);
   const remaining = (salary?.amount ?? 0) - totalAllocations - totalLoanDeductions;
-
-  const selectedCatSubs = categories?.find((c) => String(c.id) === newAlloc.categoryId)?.subcategories ?? [];
+  const hasSubcategories = categories?.some((c) => c.subcategories && c.subcategories.length > 0) ?? false;
 
   if (isLoading) {
     return (
@@ -298,43 +297,35 @@ export default function Salary() {
           )}
 
           {/* Add new allocation */}
-          {categories && categories.length > 0 ? (
+          {categories && hasSubcategories ? (
             <form onSubmit={handleAddAllocation} className="space-y-2 border-t pt-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Select
-                  value={newAlloc.categoryId}
-                  onValueChange={(v) => setNewAlloc({ ...newAlloc, categoryId: v, subcategoryId: "" })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر التصنيف" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.emoji} {c.name}
-                      </SelectItem>
+              <Select
+                value={newAlloc.subcategoryId}
+                onValueChange={(v) => {
+                  const parent = categories.find((c) => c.subcategories?.some((s) => String(s.id) === v));
+                  setNewAlloc({ ...newAlloc, subcategoryId: v, categoryId: parent ? String(parent.id) : "" });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر التصنيف الفرعي" />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" avoidCollisions={false} className="max-h-72">
+                  {categories
+                    .filter((c) => c.subcategories && c.subcategories.length > 0)
+                    .map((c) => (
+                      <SelectGroup key={c.id}>
+                        <SelectLabel className="text-xs font-semibold text-muted-foreground bg-muted/50">
+                          {c.emoji} {c.name}
+                        </SelectLabel>
+                        {c.subcategories?.map((s) => (
+                          <SelectItem key={s.id} value={String(s.id)} className="pr-8">
+                            {s.emoji} {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={newAlloc.subcategoryId || "all"}
-                  onValueChange={(v) => setNewAlloc({ ...newAlloc, subcategoryId: v === "all" ? "" : v })}
-                  disabled={!selectedCatSubs || selectedCatSubs.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="التصنيف الفرعي (اختياري)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">التصنيف كامل</SelectItem>
-                    {selectedCatSubs?.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>
-                        {s.emoji} {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                </SelectContent>
+              </Select>
 
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -350,13 +341,13 @@ export default function Salary() {
                   />
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ر.س</span>
                 </div>
-                <Button type="submit" disabled={createAllocation.isPending || !newAlloc.categoryId || !newAlloc.amount}>
+                <Button type="submit" disabled={createAllocation.isPending || !newAlloc.subcategoryId || !newAlloc.amount}>
                   <Plus className="h-4 w-4 ml-1" /> إضافة توزيع
                 </Button>
               </div>
             </form>
           ) : (
-            <p className="text-muted-foreground text-sm text-center py-2">لا توجد تصنيفات. أضف تصنيفات أولاً.</p>
+            <p className="text-muted-foreground text-sm text-center py-2">لا توجد تصنيفات فرعية. أضف تصنيفًا فرعيًا أولاً من صفحة التصنيفات.</p>
           )}
         </CardContent>
       </Card>

@@ -165,7 +165,7 @@ export default function Transactions() {
                     <SelectTrigger>
                       <SelectValue placeholder="اختر التصنيف..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" side="bottom" avoidCollisions={false} className="max-h-72">
                       {categories?.map(cat => (
                         <SelectGroup key={cat.id}>
                           <SelectLabel className="text-xs font-semibold text-muted-foreground bg-muted/50">{cat.emoji} {cat.name}</SelectLabel>
