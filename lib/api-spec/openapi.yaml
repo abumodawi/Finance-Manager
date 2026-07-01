@@ -3,13 +3,24 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Accounting app API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: accounts
+    description: Bank accounts
+  - name: categories
+    description: Expense categories
+  - name: salary
+    description: Salary configuration
+  - name: transactions
+    description: Financial transactions and statements
+  - name: summary
+    description: Dashboard summaries
+
 paths:
   /healthz:
     get:
@@ -24,6 +35,395 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: List all accounts
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Create a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountInput"
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      tags: [accounts]
+      summary: Get a single account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateAccount
+      tags: [accounts]
+      summary: Update an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdate"
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+    delete:
+      operationId: deleteAccount
+      tags: [accounts]
+      summary: Delete an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List all main categories with sub-categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create a main category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update a main category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryUpdate"
+      responses:
+        "200":
+          description: Updated category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete a main category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /subcategories:
+    post:
+      operationId: createSubcategory
+      tags: [categories]
+      summary: Create a sub-category under a main category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubcategoryInput"
+      responses:
+        "201":
+          description: Created sub-category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcategory"
+
+  /subcategories/{id}:
+    patch:
+      operationId: updateSubcategory
+      tags: [categories]
+      summary: Update a sub-category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubcategoryUpdate"
+      responses:
+        "200":
+          description: Updated sub-category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcategory"
+    delete:
+      operationId: deleteSubcategory
+      tags: [categories]
+      summary: Delete a sub-category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /salary:
+    get:
+      operationId: getSalary
+      tags: [salary]
+      summary: Get salary configuration
+      responses:
+        "200":
+          description: Salary config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Salary"
+    put:
+      operationId: upsertSalary
+      tags: [salary]
+      summary: Create or update salary configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalaryInput"
+      responses:
+        "200":
+          description: Saved salary config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Salary"
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List transactions with optional filters
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: type
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: [expense, deposit, null]
+        - name: month
+          in: query
+          description: Filter by month (YYYY-MM)
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Create a transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /transactions/{id}:
+    patch:
+      operationId: updateTransaction
+      tags: [transactions]
+      summary: Update a transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionUpdate"
+      responses:
+        "200":
+          description: Updated transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+    delete:
+      operationId: deleteTransaction
+      tags: [transactions]
+      summary: Delete a transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /summary/dashboard:
+    get:
+      operationId: getDashboardSummary
+      tags: [summary]
+      summary: Dashboard overview - total balances, monthly spend, salary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /summary/spending-by-category:
+    get:
+      operationId: getSpendingByCategory
+      tags: [summary]
+      summary: Monthly spending grouped by main category
+      parameters:
+        - name: month
+          in: query
+          description: Month to summarize (YYYY-MM), defaults to current month
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Spending breakdown by category
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategorySpending"
+
+  /summary/account-statement:
+    get:
+      operationId: getAccountStatement
+      tags: [summary]
+      summary: Full statement for one account with running balance
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: month
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Account statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountStatement"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +434,206 @@ components:
       required:
         - status
 
+    Account:
+      type: object
+      required: [id, name, bankName, accountNumber, emoji, balance, createdAt]
+      properties:
+        id:        { type: integer }
+        name:      { type: string }
+        bankName:  { type: string }
+        accountNumber: { type: string }
+        emoji:     { type: string, description: "Emoji/sticker representing the account" }
+        balance:   { type: number, description: "Current calculated balance" }
+        createdAt: { type: string, format: date-time }
+
+    AccountInput:
+      type: object
+      required: [name, bankName, accountNumber, emoji]
+      properties:
+        name:          { type: string, minLength: 1 }
+        bankName:      { type: string, minLength: 1 }
+        accountNumber: { type: string, minLength: 1 }
+        emoji:         { type: string, minLength: 1 }
+        initialBalance: { type: number, default: 0 }
+
+    AccountUpdate:
+      type: object
+      properties:
+        name:          { type: string, minLength: 1 }
+        bankName:      { type: string, minLength: 1 }
+        accountNumber: { type: string, minLength: 1 }
+        emoji:         { type: string, minLength: 1 }
+
+    Category:
+      type: object
+      required: [id, name, emoji, subcategories]
+      properties:
+        id:            { type: integer }
+        name:          { type: string }
+        emoji:         { type: string }
+        subcategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Subcategory"
+
+    CategoryInput:
+      type: object
+      required: [name, emoji]
+      properties:
+        name:  { type: string, minLength: 1 }
+        emoji: { type: string, minLength: 1 }
+
+    CategoryUpdate:
+      type: object
+      properties:
+        name:  { type: string, minLength: 1 }
+        emoji: { type: string, minLength: 1 }
+
+    Subcategory:
+      type: object
+      required: [id, categoryId, name, emoji]
+      properties:
+        id:         { type: integer }
+        categoryId: { type: integer }
+        name:       { type: string }
+        emoji:      { type: string }
+
+    SubcategoryInput:
+      type: object
+      required: [categoryId, name, emoji]
+      properties:
+        categoryId: { type: integer }
+        name:       { type: string, minLength: 1 }
+        emoji:      { type: string, minLength: 1 }
+
+    SubcategoryUpdate:
+      type: object
+      properties:
+        name:  { type: string, minLength: 1 }
+        emoji: { type: string, minLength: 1 }
+
+    Salary:
+      type: object
+      required: [id, amount, depositDay, updatedAt]
+      properties:
+        id:          { type: integer }
+        amount:      { type: number }
+        depositDay:  { type: integer, description: "Day of month the salary is deposited (1-31)" }
+        notes:       { type: ["string", "null"] }
+        updatedAt:   { type: string, format: date-time }
+
+    SalaryInput:
+      type: object
+      required: [amount, depositDay]
+      properties:
+        amount:     { type: number, minimum: 0 }
+        depositDay: { type: integer, minimum: 1, maximum: 31 }
+        notes:      { type: string }
+
+    Transaction:
+      type: object
+      required: [id, type, amount, date, accountId, createdAt]
+      properties:
+        id:            { type: integer }
+        type:          { type: string, enum: [expense, deposit] }
+        amount:        { type: number }
+        date:          { type: string, format: date }
+        accountId:     { type: integer }
+        subcategoryId: { type: ["integer", "null"] }
+        subcategoryName: { type: ["string", "null"] }
+        categoryName:  { type: ["string", "null"] }
+        notes:         { type: ["string", "null"] }
+        createdAt:     { type: string, format: date-time }
+
+    TransactionInput:
+      type: object
+      required: [type, amount, date, accountId]
+      properties:
+        type:          { type: string, enum: [expense, deposit] }
+        amount:        { type: number, minimum: 0.01 }
+        date:          { type: string, format: date }
+        accountId:     { type: integer }
+        subcategoryId: { type: ["integer", "null"] }
+        notes:         { type: ["string", "null"] }
+
+    TransactionUpdate:
+      type: object
+      properties:
+        type:          { type: string, enum: [expense, deposit] }
+        amount:        { type: number, minimum: 0.01 }
+        date:          { type: string, format: date }
+        accountId:     { type: integer }
+        subcategoryId: { type: ["integer", "null"] }
+        notes:         { type: ["string", "null"] }
+
+    DashboardSummary:
+      type: object
+      required: [totalBalance, monthlyExpenses, monthlyDeposits, salary, accountBalances, currentMonth]
+      properties:
+        totalBalance:      { type: number }
+        monthlyExpenses:   { type: number }
+        monthlyDeposits:   { type: number }
+        salary:            { type: ["number", "null"] }
+        depositDay:        { type: ["integer", "null"] }
+        currentMonth:      { type: string }
+        accountBalances:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountBalance"
+
+    AccountBalance:
+      type: object
+      required: [accountId, name, emoji, bankName, balance]
+      properties:
+        accountId: { type: integer }
+        name:      { type: string }
+        emoji:     { type: string }
+        bankName:  { type: string }
+        balance:   { type: number }
+
+    CategorySpending:
+      type: object
+      required: [categoryId, categoryName, emoji, total, subcategories]
+      properties:
+        categoryId:   { type: integer }
+        categoryName: { type: string }
+        emoji:        { type: string }
+        total:        { type: number }
+        subcategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubcategorySpending"
+
+    SubcategorySpending:
+      type: object
+      required: [subcategoryId, name, emoji, total]
+      properties:
+        subcategoryId: { type: integer }
+        name:          { type: string }
+        emoji:         { type: string }
+        total:         { type: number }
+
+    AccountStatement:
+      type: object
+      required: [account, openingBalance, closingBalance, transactions]
+      properties:
+        account:         { $ref: "#/components/schemas/Account" }
+        openingBalance:  { type: number }
+        closingBalance:  { type: number }
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatementEntry"
+
+    StatementEntry:
+      type: object
+      required: [id, type, amount, date, runningBalance]
+      properties:
+        id:              { type: integer }
+        type:            { type: string, enum: [expense, deposit] }
+        amount:          { type: number }
+        date:            { type: string, format: date }
+        subcategoryName: { type: ["string", "null"] }
+        categoryName:    { type: ["string", "null"] }
+        notes:           { type: ["string", "null"] }
+        runningBalance:  { type: number }
