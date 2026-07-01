@@ -244,28 +244,102 @@ router.post("/salary/process", async (req, res): Promise<void> => {
     return;
   }
 
-  if (salary.accountId) {
-    const dateStr = `${month}-${String(salary.depositDay).padStart(2, "0")}`;
-    await db.insert(transactionsTable).values({
-      type: "deposit",
-      amount: salary.amount,
-      date: dateStr,
-      accountId: salary.accountId,
-      notes: `راتب ${month}`,
+  if (!salary.accountId) {
+    res.json({
+      processed: false,
+      alreadyProcessed: false,
+      message: "حدد حساب الإيداع في إعدادات الراتب أولاً ثم أعد المعالجة",
     });
+    return;
   }
 
-  const allocations = await db.select().from(salaryAllocationsTable);
-  for (const alloc of allocations) {
-    await db
-      .update(categoriesTable)
-      .set({ budget: alloc.amount })
-      .where(eq(categoriesTable.id, alloc.categoryId));
+  const accountId = salary.accountId;
+  const dateStr = `${month}-${String(salary.depositDay).padStart(2, "0")}`;
+  const salaryAmount = parseFloat(salary.amount);
+
+  // Fetch allocations with their category/subcategory names for labeling.
+  const allocations = await db
+    .select({
+      amount: salaryAllocationsTable.amount,
+      categoryId: salaryAllocationsTable.categoryId,
+      subcategoryId: salaryAllocationsTable.subcategoryId,
+      categoryName: categoriesTable.name,
+      subcategoryName: subcategoriesTable.name,
+    })
+    .from(salaryAllocationsTable)
+    .leftJoin(categoriesTable, eq(salaryAllocationsTable.categoryId, categoriesTable.id))
+    .leftJoin(subcategoriesTable, eq(salaryAllocationsTable.subcategoryId, subcategoriesTable.id));
+
+  const positiveAllocations = allocations.filter((a) => parseFloat(a.amount) > 0);
+  const allocatedTotal = positiveAllocations.reduce((sum, a) => sum + parseFloat(a.amount), 0);
+
+  // Guard: allocations must not exceed the salary, otherwise the total deposited
+  // would be larger than the salary and the balance would be wrong.
+  if (allocatedTotal > salaryAmount + 0.009) {
+    res.json({
+      processed: false,
+      alreadyProcessed: false,
+      message: `مجموع التوزيعات (${allocatedTotal.toFixed(2)}) أكبر من الراتب (${salaryAmount.toFixed(2)})، عدّل التوزيعات ثم أعد المعالجة`,
+    });
+    return;
   }
 
-  await db.insert(salaryProcessingLogTable).values({ processedMonth: month });
+  const allocsForBudget = await db.select().from(salaryAllocationsTable);
+  const remainder = salaryAmount - allocatedTotal;
 
-  res.json({ processed: true, alreadyProcessed: false, message: `تم معالجة راتب ${month} بنجاح` });
+  // Wrap all writes in a single transaction. Inserting the processing-log row
+  // first (it has a unique constraint on processedMonth) makes the whole
+  // operation idempotent: a concurrent duplicate call rolls back cleanly.
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(salaryProcessingLogTable).values({ processedMonth: month });
+
+      // One categorized deposit per allocation so each shows up in the
+      // operations list, the account statement, and as "received" per subcategory.
+      for (const alloc of positiveAllocations) {
+        const label = alloc.subcategoryName ?? alloc.categoryName ?? "";
+        await tx.insert(transactionsTable).values({
+          type: "deposit",
+          amount: alloc.amount,
+          date: dateStr,
+          accountId,
+          subcategoryId: alloc.subcategoryId ?? null,
+          notes: `راتب ${month}${label ? ` - ${label}` : ""}`,
+        });
+      }
+
+      // Deposit any unallocated remainder so the account balance equals the full
+      // salary. If there were no allocations, this is the entire salary.
+      if (remainder > 0.009) {
+        await tx.insert(transactionsTable).values({
+          type: "deposit",
+          amount: remainder.toFixed(2),
+          date: dateStr,
+          accountId,
+          subcategoryId: null,
+          notes: positiveAllocations.length ? `راتب ${month} - غير موزع` : `راتب ${month}`,
+        });
+      }
+
+      // Keep category budgets in sync with the allocations.
+      for (const alloc of allocsForBudget) {
+        await tx
+          .update(categoriesTable)
+          .set({ budget: alloc.amount })
+          .where(eq(categoriesTable.id, alloc.categoryId));
+      }
+    });
+  } catch (err) {
+    // Unique-violation on processedMonth means a concurrent call already
+    // processed this month; treat it as already processed rather than an error.
+    if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "23505") {
+      res.json({ processed: false, alreadyProcessed: true, message: `تم معالجة راتب ${month} مسبقاً` });
+      return;
+    }
+    throw err;
+  }
+
+  res.json({ processed: true, alreadyProcessed: false, message: `تم معالجة راتب ${month} وإيداعه في الحساب بنجاح` });
 });
 
 export default router;

@@ -23,7 +23,8 @@ import { cn } from "@/lib/utils";
 
 export default function Transactions() {
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7));
-  const { data: transactions, isLoading } = useListTransactions({ month: filterMonth });
+  const [showAll, setShowAll] = useState(false);
+  const { data: transactions, isLoading } = useListTransactions(showAll ? {} : { month: filterMonth });
   const { data: accounts } = useListAccounts();
   const { data: categories } = useListCategories();
   
@@ -87,10 +88,18 @@ export default function Transactions() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h2 className="text-3xl font-bold">العمليات</h2>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant={showAll ? "default" : "outline"}
+            onClick={() => setShowAll((v) => !v)}
+          >
+            {showAll ? "كل الشهور" : "شهر محدد"}
+          </Button>
           <Input 
             type="month" 
             value={filterMonth} 
             onChange={(e) => setFilterMonth(e.target.value)}
+            disabled={showAll}
             className="w-40"
           />
           <Dialog open={isOpen} onOpenChange={setIsOpen}>

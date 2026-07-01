@@ -1,1 +1,2 @@
 - [Date columns vs zod coerce](date-columns-zod-coerce.md) — DB date cols are string-mode but codegen zod uses coerce.date(); convert to YYYY-MM-DD (`toISOString().slice(0,10)`) on writes.
+- [Salary processing deposits](salary-processing-deposits.md) — /salary/process makes one categorized deposit per allocation + remainder = full salary; needs salary.accountId; loans not auto-deposited.
