@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
@@ -158,14 +158,14 @@ export default function Transactions() {
                     </SelectTrigger>
                     <SelectContent>
                       {categories?.map(cat => (
-                        <div key={cat.id}>
-                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50">{cat.emoji} {cat.name}</div>
+                        <SelectGroup key={cat.id}>
+                          <SelectLabel className="text-xs font-semibold text-muted-foreground bg-muted/50">{cat.emoji} {cat.name}</SelectLabel>
                           {cat.subcategories?.map(sub => (
-                            <SelectItem key={sub.id} value={sub.id.toString()} className="pl-6">
+                            <SelectItem key={sub.id} value={sub.id.toString()} className="pr-8">
                               {sub.emoji} {sub.name}
                             </SelectItem>
                           ))}
-                        </div>
+                        </SelectGroup>
                       ))}
                     </SelectContent>
                   </Select>
