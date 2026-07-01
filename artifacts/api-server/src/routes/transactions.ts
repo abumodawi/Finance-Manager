@@ -82,7 +82,7 @@ router.post("/transactions", async (req, res): Promise<void> => {
     .values({
       type: parsed.data.type,
       amount: String(parsed.data.amount),
-      date: parsed.data.date,
+      date: parsed.data.date.toISOString().slice(0, 10),
       accountId: parsed.data.accountId,
       subcategoryId: parsed.data.subcategoryId ?? null,
       notes: parsed.data.notes ?? null,

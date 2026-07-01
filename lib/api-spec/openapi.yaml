@@ -363,7 +363,13 @@ paths:
     post:
       operationId: processSalary
       tags: [salary]
-      summary: Process salary for the current month (creates deposit transaction and updates category budgets)
+      summary: Process salary for a month (creates deposit transaction and updates category budgets)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalaryProcessInput"
       responses:
         "200":
           description: Process result
@@ -561,6 +567,25 @@ paths:
                 items:
                   $ref: "#/components/schemas/CategorySpending"
 
+  /summary/account-breakdown:
+    get:
+      operationId: getAccountBreakdown
+      tags: [summary]
+      summary: Per-subcategory received/spent amounts for one account
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Account breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountBreakdown"
+
   /summary/account-statement:
     get:
       operationId: getAccountStatement
@@ -730,6 +755,11 @@ components:
       properties:
         amount: { type: number, minimum: 0 }
 
+    SalaryProcessInput:
+      type: object
+      properties:
+        month: { type: string, description: "Month to process (YYYY-MM); defaults to current month" }
+
     SalaryProcessResult:
       type: object
       required: [processed, message]
@@ -770,6 +800,7 @@ components:
         totalAmount:        { type: number, minimum: 0 }
         monthlyInstallment: { type: number, minimum: 0 }
         months:             { type: integer, minimum: 1 }
+        startDate:          { type: string, format: date }
         remainingMonths:    { type: integer, minimum: 0 }
         isActive:           { type: boolean }
 
@@ -856,6 +887,35 @@ components:
         name:          { type: string }
         emoji:         { type: string }
         total:         { type: number }
+
+    AccountBreakdown:
+      type: object
+      required: [account, categories, totalReceived, totalSpent]
+      properties:
+        account:       { $ref: "#/components/schemas/Account" }
+        totalReceived: { type: number }
+        totalSpent:    { type: number }
+        categories:
+          type: array
+          items:
+            type: object
+            required: [id, name, emoji, subcategories]
+            properties:
+              id:    { type: integer }
+              name:  { type: string }
+              emoji: { type: string }
+              subcategories:
+                type: array
+                items:
+                  type: object
+                  required: [id, name, emoji, received, spent, net]
+                  properties:
+                    id:       { type: integer }
+                    name:     { type: string }
+                    emoji:    { type: string }
+                    received: { type: number }
+                    spent:    { type: number }
+                    net:      { type: number }
 
     AccountStatement:
       type: object

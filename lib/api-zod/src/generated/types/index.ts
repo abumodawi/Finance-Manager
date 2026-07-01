@@ -8,6 +8,9 @@
 
 export * from './account';
 export * from './accountBalance';
+export * from './accountBreakdown';
+export * from './accountBreakdownCategoriesItem';
+export * from './accountBreakdownCategoriesItemSubcategoriesItem';
 export * from './accountInput';
 export * from './accountStatement';
 export * from './accountUpdate';
@@ -16,6 +19,7 @@ export * from './categoryInput';
 export * from './categorySpending';
 export * from './categoryUpdate';
 export * from './dashboardSummary';
+export * from './getAccountBreakdownParams';
 export * from './getAccountStatementParams';
 export * from './getSpendingByCategoryParams';
 export * from './healthStatus';
@@ -30,6 +34,7 @@ export * from './salaryAllocation';
 export * from './salaryAllocationInput';
 export * from './salaryAllocationUpdate';
 export * from './salaryInput';
+export * from './salaryProcessInput';
 export * from './salaryProcessResult';
 export * from './statementEntry';
 export * from './statementEntryType';

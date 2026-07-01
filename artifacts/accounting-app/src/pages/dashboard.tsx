@@ -5,9 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
-  const { data: spending, isLoading: isLoadingSpending } = useGetSpendingByCategory({ 
-    query: { enabled: true } 
-  });
+  const { data: spending, isLoading: isLoadingSpending } = useGetSpendingByCategory();
 
   if (isLoadingSummary || isLoadingSpending) {
     return (

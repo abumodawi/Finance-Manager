@@ -161,6 +161,11 @@ export interface SalaryAllocationUpdate {
   amount?: number;
 }
 
+export interface SalaryProcessInput {
+  /** Month to process (YYYY-MM); defaults to current month */
+  month?: string;
+}
+
 export interface SalaryProcessResult {
   processed: boolean;
   alreadyProcessed?: boolean;
@@ -202,6 +207,7 @@ export interface LoanUpdate {
   monthlyInstallment?: number;
   /** @minimum 1 */
   months?: number;
+  startDate?: string;
   /** @minimum 0 */
   remainingMonths?: number;
   isActive?: boolean;
@@ -309,6 +315,29 @@ export interface CategorySpending {
   subcategories: SubcategorySpending[];
 }
 
+export type AccountBreakdownCategoriesItemSubcategoriesItem = {
+  id: number;
+  name: string;
+  emoji: string;
+  received: number;
+  spent: number;
+  net: number;
+};
+
+export type AccountBreakdownCategoriesItem = {
+  id: number;
+  name: string;
+  emoji: string;
+  subcategories: AccountBreakdownCategoriesItemSubcategoriesItem[];
+};
+
+export interface AccountBreakdown {
+  account: Account;
+  totalReceived: number;
+  totalSpent: number;
+  categories: AccountBreakdownCategoriesItem[];
+}
+
 export type StatementEntryType = typeof StatementEntryType[keyof typeof StatementEntryType];
 
 
@@ -376,6 +405,10 @@ export type GetSpendingByCategoryParams = {
  * @nullable
  */
 month?: string | null;
+};
+
+export type GetAccountBreakdownParams = {
+accountId: number;
 };
 
 export type GetAccountStatementParams = {

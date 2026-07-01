@@ -30,12 +30,13 @@ router.post("/loans", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { totalAmount, monthlyInstallment, remainingMonths, ...rest } = parsed.data;
+  const { totalAmount, monthlyInstallment, remainingMonths, startDate, ...rest } = parsed.data;
   const calcRemaining = remainingMonths !== undefined ? remainingMonths : rest.months;
   const [loan] = await db
     .insert(loansTable)
     .values({
       ...rest,
+      startDate: startDate.toISOString().slice(0, 10),
       totalAmount: String(totalAmount),
       monthlyInstallment: String(monthlyInstallment),
       remainingMonths: calcRemaining,
@@ -55,8 +56,9 @@ router.patch("/loans/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { totalAmount, monthlyInstallment, remainingMonths, ...rest } = parsed.data;
+  const { totalAmount, monthlyInstallment, remainingMonths, startDate, ...rest } = parsed.data;
   const updateData: Record<string, unknown> = { ...rest };
+  if (startDate !== undefined) updateData.startDate = startDate.toISOString().slice(0, 10);
   if (totalAmount !== undefined) updateData.totalAmount = String(totalAmount);
   if (monthlyInstallment !== undefined) updateData.monthlyInstallment = String(monthlyInstallment);
   if (remainingMonths !== undefined) updateData.remainingMonths = remainingMonths;

@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 export default function Transactions() {
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7));
-  const { data: transactions, isLoading } = useListTransactions({ month: filterMonth }, { query: { queryKey: getListTransactionsQueryKey() } });
+  const { data: transactions, isLoading } = useListTransactions({ month: filterMonth });
   const { data: accounts } = useListAccounts();
   const { data: categories } = useListCategories();
   
@@ -64,19 +64,19 @@ export default function Transactions() {
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
         setIsOpen(false);
         setFormData({ ...formData, amount: "", notes: "" });
-        toast({ title: "تم إضافة المعاملة بنجاح" });
+        toast({ title: "تم إضافة العملية بنجاح" });
       }
     });
   };
 
   const handleDelete = (id: number) => {
-    if (confirm("هل أنت متأكد من حذف هذه المعاملة؟ سيتم تحديث رصيد الحساب.")) {
+    if (confirm("هل أنت متأكد من حذف هذه العملية؟ سيتم تحديث رصيد الحساب.")) {
       deleteTransaction.mutate({ id }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "تم حذف المعاملة بنجاح" });
+          toast({ title: "تم حذف العملية بنجاح" });
         }
       });
     }
@@ -85,7 +85,7 @@ export default function Transactions() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h2 className="text-3xl font-bold">المعاملات</h2>
+        <h2 className="text-3xl font-bold">العمليات</h2>
         <div className="flex items-center gap-2">
           <Input 
             type="month" 
@@ -95,11 +95,11 @@ export default function Transactions() {
           />
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="ml-2 h-4 w-4" /> إضافة معاملة</Button>
+              <Button><Plus className="ml-2 h-4 w-4" /> إضافة عملية</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>إضافة معاملة جديدة</DialogTitle>
+                <DialogTitle>إضافة عملية جديدة</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex gap-2 p-1 bg-muted rounded-lg">
@@ -218,7 +218,7 @@ export default function Transactions() {
                 </div>
               ))}
               {(!transactions || transactions.length === 0) && (
-                <div className="p-12 text-center text-muted-foreground">لا توجد معاملات في هذا الشهر</div>
+                <div className="p-12 text-center text-muted-foreground">لا توجد عمليات في هذا الشهر</div>
               )}
             </div>
           )}

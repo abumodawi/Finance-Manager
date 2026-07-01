@@ -7,6 +7,7 @@ import {
   UpdateSalaryAllocationParams,
   UpdateSalaryAllocationBody,
   DeleteSalaryAllocationParams,
+  ProcessSalaryBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -205,8 +206,14 @@ router.delete("/salary/allocations/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-router.post("/salary/process", async (_req, res): Promise<void> => {
-  const month = currentMonthStr();
+router.post("/salary/process", async (req, res): Promise<void> => {
+  const parsed = ProcessSalaryBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const month = parsed.data.month || currentMonthStr();
+  const isCurrentMonth = month === currentMonthStr();
 
   const existing = await db
     .select()
@@ -232,7 +239,7 @@ router.post("/salary/process", async (_req, res): Promise<void> => {
   const salary = salaryRows[0];
   const today = new Date().getDate();
 
-  if (today < salary.depositDay) {
+  if (isCurrentMonth && today < salary.depositDay) {
     res.json({ processed: false, alreadyProcessed: false, message: `موعد الإيداع لم يحن بعد (اليوم ${salary.depositDay} من الشهر)` });
     return;
   }

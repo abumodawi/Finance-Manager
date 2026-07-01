@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
 import { db, accountsTable, transactionsTable, subcategoriesTable, categoriesTable, salaryTable } from "@workspace/db";
-import { GetSpendingByCategoryQueryParams, GetAccountStatementQueryParams } from "@workspace/api-zod";
+import { GetSpendingByCategoryQueryParams, GetAccountStatementQueryParams, GetAccountBreakdownQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -188,19 +188,14 @@ router.get("/summary/account-statement", async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(transactionsTable.date, transactionsTable.id);
 
-  // Compute opening balance = initialBalance + all transactions BEFORE the filter period
+  // Compute opening balance = initialBalance + all transactions strictly BEFORE the filter period
   let openingBalance = parseFloat(account.initialBalance);
   if (qp.data.month) {
     const { start } = monthRange(qp.data.month);
-    const priorRows = await db
-      .select({ total: sql<string>`COALESCE(SUM(CASE WHEN type = 'deposit' THEN amount::numeric ELSE -amount::numeric END), 0)` })
-      .from(transactionsTable)
-      .where(and(eq(transactionsTable.accountId, accountId), lte(transactionsTable.date, start)));
-    // subtract start day itself for strict "before" - use strict less-than approach
     const allPrior = await db
       .select({ total: sql<string>`COALESCE(SUM(CASE WHEN type = 'deposit' THEN amount::numeric ELSE -amount::numeric END), 0)` })
       .from(transactionsTable)
-      .where(and(eq(transactionsTable.accountId, accountId), lte(transactionsTable.date, `${start.slice(0, 8)}00`)));
+      .where(and(eq(transactionsTable.accountId, accountId), lt(transactionsTable.date, start)));
     openingBalance = parseFloat(account.initialBalance) + parseFloat(allPrior[0]?.total ?? "0");
   }
 
@@ -235,6 +230,88 @@ router.get("/summary/account-statement", async (req, res): Promise<void> => {
     openingBalance,
     closingBalance,
     transactions: entries,
+  });
+});
+
+router.get("/summary/account-breakdown", async (req, res): Promise<void> => {
+  const qp = GetAccountBreakdownQueryParams.safeParse(req.query);
+  if (!qp.success) {
+    res.status(400).json({ error: qp.error.message });
+    return;
+  }
+
+  const accountId = qp.data.accountId;
+  const [account] = await db.select().from(accountsTable).where(eq(accountsTable.id, accountId));
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+
+  const cats = await db.select().from(categoriesTable).orderBy(categoriesTable.id);
+  const subs = await db.select().from(subcategoriesTable).orderBy(subcategoriesTable.id);
+
+  const agg = await db
+    .select({
+      subcategoryId: transactionsTable.subcategoryId,
+      received: sql<string>`COALESCE(SUM(CASE WHEN type = 'deposit' THEN amount::numeric ELSE 0 END), 0)`,
+      spent: sql<string>`COALESCE(SUM(CASE WHEN type = 'expense' THEN amount::numeric ELSE 0 END), 0)`,
+    })
+    .from(transactionsTable)
+    .where(eq(transactionsTable.accountId, accountId))
+    .groupBy(transactionsTable.subcategoryId);
+
+  const aggMap = new Map<number, { received: number; spent: number }>();
+  for (const row of agg) {
+    if (row.subcategoryId != null) {
+      aggMap.set(row.subcategoryId, {
+        received: parseFloat(row.received),
+        spent: parseFloat(row.spent),
+      });
+    }
+  }
+
+  let totalReceived = 0;
+  let totalSpent = 0;
+
+  const categories = cats
+    .map((cat) => {
+      const catSubs = subs
+        .filter((s) => s.categoryId === cat.id && aggMap.has(s.id))
+        .map((s) => {
+          const a = aggMap.get(s.id) ?? { received: 0, spent: 0 };
+          totalReceived += a.received;
+          totalSpent += a.spent;
+          return {
+            id: s.id,
+            name: s.name,
+            emoji: s.emoji,
+            received: a.received,
+            spent: a.spent,
+            net: a.received - a.spent,
+          };
+        });
+      return {
+        id: cat.id,
+        name: cat.name,
+        emoji: cat.emoji,
+        subcategories: catSubs,
+      };
+    })
+    .filter((c) => c.subcategories.length > 0);
+
+  res.json({
+    account: {
+      id: account.id,
+      name: account.name,
+      bankName: account.bankName,
+      accountNumber: account.accountNumber,
+      emoji: account.emoji,
+      balance: await getAccountBalance(account.id, account.initialBalance),
+      createdAt: account.createdAt.toISOString(),
+    },
+    totalReceived,
+    totalSpent,
+    categories,
   });
 });
 

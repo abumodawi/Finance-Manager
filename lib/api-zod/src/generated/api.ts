@@ -398,8 +398,12 @@ export const DeleteSalaryAllocationResponse = zod.void()
 
 
 /**
- * @summary Process salary for the current month (creates deposit transaction and updates category budgets)
+ * @summary Process salary for a month (creates deposit transaction and updates category budgets)
  */
+export const ProcessSalaryBody = zod.object({
+  "month": zod.string().optional().describe('Month to process (YYYY-MM); defaults to current month')
+})
+
 export const ProcessSalaryResponse = zod.object({
   "processed": zod.boolean(),
   "alreadyProcessed": zod.boolean().optional(),
@@ -481,6 +485,7 @@ export const UpdateLoanBody = zod.object({
   "totalAmount": zod.number().min(updateLoanBodyTotalAmountMin).optional(),
   "monthlyInstallment": zod.number().min(updateLoanBodyMonthlyInstallmentMin).optional(),
   "months": zod.number().min(1).optional(),
+  "startDate": zod.coerce.date().optional(),
   "remainingMonths": zod.number().min(updateLoanBodyRemainingMonthsMin).optional(),
   "isActive": zod.boolean().optional()
 })
@@ -647,6 +652,42 @@ export const GetSpendingByCategoryResponseItem = zod.object({
 }))
 })
 export const GetSpendingByCategoryResponse = zod.array(GetSpendingByCategoryResponseItem)
+
+
+/**
+ * @summary Per-subcategory received/spent amounts for one account
+ */
+export const GetAccountBreakdownQueryParams = zod.object({
+  "accountId": zod.coerce.number()
+})
+
+export const GetAccountBreakdownResponse = zod.object({
+  "account": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "bankName": zod.string(),
+  "accountNumber": zod.string(),
+  "emoji": zod.string().optional(),
+  "imageUrl": zod.string().nullish(),
+  "balance": zod.number(),
+  "createdAt": zod.coerce.date()
+}),
+  "totalReceived": zod.number(),
+  "totalSpent": zod.number(),
+  "categories": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "emoji": zod.string(),
+  "subcategories": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "emoji": zod.string(),
+  "received": zod.number(),
+  "spent": zod.number(),
+  "net": zod.number()
+}))
+}))
+})
 
 
 /**

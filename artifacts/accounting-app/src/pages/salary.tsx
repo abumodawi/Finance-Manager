@@ -46,6 +46,7 @@ export default function Salary() {
   const [newAlloc, setNewAlloc] = useState({ categoryId: "", subcategoryId: "", amount: "" });
   const [editAllocId, setEditAllocId] = useState<number | null>(null);
   const [editAllocAmount, setEditAllocAmount] = useState("");
+  const [processMonth, setProcessMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
   useEffect(() => {
     if (salary) {
@@ -125,8 +126,8 @@ export default function Salary() {
     );
   };
 
-  const handleProcess = () => {
-    processSalary.mutate(undefined, {
+  const handleProcess = (month?: string) => {
+    processSalary.mutate(month ? { data: { month } } : { data: {} }, {
       onSuccess: (data) => {
         if (data.processed) {
           queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
@@ -415,16 +416,41 @@ export default function Salary() {
               عند الضغط سيتم إيداع الراتب في الحساب المحدد وتحديث ميزانية التصنيفات
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Button
               className="w-full"
               variant="default"
-              onClick={handleProcess}
+              onClick={() => handleProcess()}
               disabled={processSalary.isPending}
             >
               <RefreshCw className={`ml-2 h-4 w-4 ${processSalary.isPending ? "animate-spin" : ""}`} />
               معالجة راتب الشهر الحالي
             </Button>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label>معالجة راتب شهر محدد</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="month"
+                  value={processMonth}
+                  onChange={(e) => setProcessMonth(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => handleProcess(processMonth)}
+                  disabled={processSalary.isPending || !processMonth}
+                >
+                  <RefreshCw className={`ml-2 h-4 w-4 ${processSalary.isPending ? "animate-spin" : ""}`} />
+                  معالجة
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                اختر الشهر الذي تريد معالجة راتبه (بصيغة سنة-شهر)
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}

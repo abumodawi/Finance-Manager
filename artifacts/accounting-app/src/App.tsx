@@ -6,6 +6,7 @@ import { Layout } from "@/components/layout";
 
 import Dashboard from "@/pages/dashboard";
 import Accounts from "@/pages/accounts";
+import AccountDetail from "@/pages/account-detail";
 import Transactions from "@/pages/transactions";
 import Statement from "@/pages/statement";
 import Categories from "@/pages/categories";
@@ -21,6 +22,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/accounts" component={Accounts} />
+        <Route path="/accounts/:id" component={AccountDetail} />
         <Route path="/transactions" component={Transactions} />
         <Route path="/statement" component={Statement} />
         <Route path="/categories" component={Categories} />

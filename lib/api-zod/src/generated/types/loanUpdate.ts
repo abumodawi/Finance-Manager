@@ -15,6 +15,7 @@ export interface LoanUpdate {
   monthlyInstallment?: number;
   /** @minimum 1 */
   months?: number;
+  startDate?: Date;
   /** @minimum 0 */
   remainingMonths?: number;
   isActive?: boolean;

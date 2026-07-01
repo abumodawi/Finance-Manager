@@ -21,6 +21,7 @@ import type {
 
 import type {
   Account,
+  AccountBreakdown,
   AccountInput,
   AccountStatement,
   AccountUpdate,
@@ -29,6 +30,7 @@ import type {
   CategorySpending,
   CategoryUpdate,
   DashboardSummary,
+  GetAccountBreakdownParams,
   GetAccountStatementParams,
   GetSpendingByCategoryParams,
   HealthStatus,
@@ -42,6 +44,7 @@ import type {
   SalaryAllocationInput,
   SalaryAllocationUpdate,
   SalaryInput,
+  SalaryProcessInput,
   SalaryProcessResult,
   Subcategory,
   SubcategoryInput,
@@ -1470,16 +1473,16 @@ export const getProcessSalaryUrl = () => {
 }
 
 /**
- * @summary Process salary for the current month (creates deposit transaction and updates category budgets)
+ * @summary Process salary for a month (creates deposit transaction and updates category budgets)
  */
-export const processSalary = async ( options?: RequestInit): Promise<SalaryProcessResult> => {
+export const processSalary = async (salaryProcessInput?: SalaryProcessInput, options?: RequestInit): Promise<SalaryProcessResult> => {
 
   return customFetch<SalaryProcessResult>(getProcessSalaryUrl(),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(salaryProcessInput)
   }
 );}
 
@@ -1487,8 +1490,8 @@ export const processSalary = async ( options?: RequestInit): Promise<SalaryProce
 
 
 export const getProcessSalaryMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processSalary>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof processSalary>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processSalary>>, TError,{data?: BodyType<SalaryProcessInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof processSalary>>, TError,{data?: BodyType<SalaryProcessInput>}, TContext> => {
 
 const mutationKey = ['processSalary'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -1500,10 +1503,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processSalary>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof processSalary>>, {data?: BodyType<SalaryProcessInput>}> = (props) => {
+          const {data} = props ?? {};
 
-
-          return  processSalary(requestOptions)
+          return  processSalary(data,requestOptions)
         }
 
 
@@ -1514,18 +1517,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ProcessSalaryMutationResult = NonNullable<Awaited<ReturnType<typeof processSalary>>>
-
+    export type ProcessSalaryMutationBody = BodyType<SalaryProcessInput> | undefined
     export type ProcessSalaryMutationError = ErrorType<unknown>
 
     /**
- * @summary Process salary for the current month (creates deposit transaction and updates category budgets)
+ * @summary Process salary for a month (creates deposit transaction and updates category budgets)
  */
 export const useProcessSalary = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processSalary>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof processSalary>>, TError,{data?: BodyType<SalaryProcessInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof processSalary>>,
         TError,
-        void,
+        {data?: BodyType<SalaryProcessInput>},
         TContext
       > => {
       return useMutation(getProcessSalaryMutationOptions(options));
@@ -2263,6 +2266,90 @@ export function useGetSpendingByCategory<TData = Awaited<ReturnType<typeof getSp
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSpendingByCategoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAccountBreakdownUrl = (params: GetAccountBreakdownParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/summary/account-breakdown?${stringifiedParams}` : `/api/summary/account-breakdown`
+}
+
+/**
+ * @summary Per-subcategory received/spent amounts for one account
+ */
+export const getAccountBreakdown = async (params: GetAccountBreakdownParams, options?: RequestInit): Promise<AccountBreakdown> => {
+
+  return customFetch<AccountBreakdown>(getGetAccountBreakdownUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountBreakdownQueryKey = (params?: GetAccountBreakdownParams,) => {
+    return [
+    `/api/summary/account-breakdown`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAccountBreakdownQueryOptions = <TData = Awaited<ReturnType<typeof getAccountBreakdown>>, TError = ErrorType<unknown>>(params: GetAccountBreakdownParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountBreakdown>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountBreakdownQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountBreakdown>>> = ({ signal }) => getAccountBreakdown(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountBreakdown>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountBreakdownQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountBreakdown>>>
+export type GetAccountBreakdownQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Per-subcategory received/spent amounts for one account
+ */
+
+export function useGetAccountBreakdown<TData = Awaited<ReturnType<typeof getAccountBreakdown>>, TError = ErrorType<unknown>>(
+ params: GetAccountBreakdownParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountBreakdown>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountBreakdownQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

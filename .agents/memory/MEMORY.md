@@ -1,0 +1,1 @@
+- [Date columns vs zod coerce](date-columns-zod-coerce.md) — DB date cols are string-mode but codegen zod uses coerce.date(); convert to YYYY-MM-DD (`toISOString().slice(0,10)`) on writes.

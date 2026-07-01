@@ -1,23 +1,21 @@
 import { useState, useRef } from "react";
+import { useLocation } from "wouter";
 import {
   useListAccounts,
   useCreateAccount,
   useUpdateAccount,
   useDeleteAccount,
   useListCategories,
-  useUpdateCategory,
   getListAccountsQueryKey,
-  getListCategoriesQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Upload, ImageIcon, Tags, ArrowLeftRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, ImageIcon, Tags } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type AccountForm = {
@@ -93,32 +91,15 @@ export default function Accounts() {
   const { data: categories } = useListCategories();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const deleteAccount = useDeleteAccount();
-  const updateCategory = useUpdateCategory();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [formData, setFormData] = useState<AccountForm>(EMPTY_FORM);
-  const [viewAccountId, setViewAccountId] = useState<number | null>(null);
-
-  const viewAccount = accounts?.find((a) => a.id === viewAccountId) ?? null;
-  const accountCategories = categories?.filter((c) => c.accountId === viewAccountId) ?? [];
-
-  const handleTransferCategory = (categoryId: number, newAccountId: string) => {
-    updateCategory.mutate(
-      { id: categoryId, data: { accountId: newAccountId === "none" ? null : parseInt(newAccountId) } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
-          toast({ title: "تم نقل التصنيف بنجاح" });
-        },
-        onError: () => toast({ title: "حدث خطأ أثناء النقل", variant: "destructive" }),
-      }
-    );
-  };
 
   const openCreate = () => {
     setEditId(null);
@@ -285,7 +266,7 @@ export default function Accounts() {
                 </div>
                 <div
                   className="cursor-pointer"
-                  onClick={() => setViewAccountId(account.id)}
+                  onClick={() => navigate(`/accounts/${account.id}`)}
                 >
                   <div className="flex items-center gap-4 mb-4">
                     <AccountAvatar account={account} />
@@ -303,7 +284,7 @@ export default function Accounts() {
                       <Tags className="h-3.5 w-3.5" />
                       {(categories?.filter((c) => c.accountId === account.id).length ?? 0)} تصنيف
                     </span>
-                    <span className="text-primary text-xs">عرض التصنيفات ←</span>
+                    <span className="text-primary text-xs">عرض التفاصيل ←</span>
                   </div>
                 </div>
               </CardContent>
@@ -316,73 +297,6 @@ export default function Accounts() {
           )}
         </div>
       )}
-
-      {/* Account categories dialog */}
-      <Dialog open={viewAccountId !== null} onOpenChange={(o) => !o && setViewAccountId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {viewAccount && <AccountAvatarSmall account={viewAccount} />}
-              تصنيفات: {viewAccount?.name}
-            </DialogTitle>
-            <DialogDescription>
-              التصنيفات المرتبطة بهذا الحساب. يمكنك نقل أي تصنيف إلى حساب آخر.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {accountCategories.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                لا توجد تصنيفات مرتبطة بهذا الحساب
-              </div>
-            ) : (
-              accountCategories.map((cat) => (
-                <div key={cat.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <span className="text-2xl shrink-0">{cat.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{cat.name}</p>
-                    {cat.budget !== null && cat.budget !== undefined && (
-                      <p className="text-xs text-muted-foreground">
-                        الميزانية: {formatCurrency(cat.budget)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    <Select
-                      value={cat.accountId != null ? String(cat.accountId) : "none"}
-                      onValueChange={(v) => handleTransferCategory(cat.id, v)}
-                    >
-                      <SelectTrigger className="h-8 w-36 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">بدون حساب</SelectItem>
-                        {accounts?.map((acc) => (
-                          <SelectItem key={acc.id} value={String(acc.id)}>
-                            {acc.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
-}
-
-function AccountAvatarSmall({ account }: { account: { imageUrl?: string | null; emoji?: string | null; name: string } }) {
-  if (account.imageUrl) {
-    return (
-      <div className="w-7 h-7 rounded-full overflow-hidden bg-muted shrink-0 inline-block">
-        <img src={account.imageUrl} alt={account.name} className="w-full h-full object-cover" />
-      </div>
-    );
-  }
-  return <span className="text-xl">{account.emoji ?? "🏦"}</span>;
 }

@@ -88,6 +88,7 @@ export default function Loans() {
             totalAmount: total,
             monthlyInstallment: installment,
             months,
+            startDate: form.startDate,
           },
         },
         {
@@ -230,7 +231,6 @@ export default function Loans() {
                     value={form.startDate}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
                     dir="ltr"
-                    disabled={editId !== null}
                   />
                 </div>
               </div>
