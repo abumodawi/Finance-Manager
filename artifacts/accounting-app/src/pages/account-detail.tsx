@@ -224,7 +224,7 @@ function TransferPopover({ sub, accounts, isPending, onTransfer }: TransferPopov
           نقل
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" side="bottom" avoidCollisions={false} className="w-64 space-y-3">
+      <PopoverContent align="end" side="top" sideOffset={6} collisionPadding={12} className="w-64 space-y-3">
         <div className="space-y-1">
           <p className="text-sm font-bold">نقل «{sub.name}»</p>
           <p className="text-xs text-muted-foreground">المتاح: {formatCurrency(max)}</p>
