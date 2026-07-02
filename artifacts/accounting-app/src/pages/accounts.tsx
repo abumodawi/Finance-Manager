@@ -132,6 +132,8 @@ export default function Accounts() {
             setIsOpen(false);
             toast({ title: "تم تحديث الحساب بنجاح" });
           },
+          onError: () =>
+            toast({ title: "تعذّر حفظ الحساب. تأكد من حجم الصورة وحاول مجددًا.", variant: "destructive" }),
         }
       );
     } else {
@@ -144,6 +146,8 @@ export default function Accounts() {
             setFormData(EMPTY_FORM);
             toast({ title: "تم إضافة الحساب بنجاح" });
           },
+          onError: () =>
+            toast({ title: "تعذّر حفظ الحساب. تأكد من حجم الصورة وحاول مجددًا.", variant: "destructive" }),
         }
       );
     }

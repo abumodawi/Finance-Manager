@@ -2,3 +2,4 @@
 - [Vercel deployment](vercel-deployment.md) — single Vercel project; API via committed catch-all `api/[...path].js` requiring generated `_server.cjs` bundle (not a rewrite); SPA fallback; DB_POOL_MAX for serverless.
 - [Salary processing deposits](salary-processing-deposits.md) — re-runnable runSalaryProcessing(); full salary split into category/remainder subs + PER-LOAN debt subs; deploy-time auto-backfill reprocesses existing months.
 - [Account breakdown & transfers](account-breakdown-transfers.md) — balances/breakdown are transaction.accountId based; transfer = move a subcategory's transactions between accounts.
+- [Inline base64 images & body limits](inline-base64-images.md) — images stored as inline base64 data URLs; needs raised express body limit (10mb) + onError on forms or saves fail silently (413).

@@ -106,6 +106,8 @@ export default function Categories() {
             setIsCatOpen(false);
             toast({ title: "تم تحديث التصنيف" });
           },
+          onError: () =>
+            toast({ title: "تعذّر حفظ التصنيف. حاول مجددًا.", variant: "destructive" }),
         }
       );
     } else {
@@ -118,6 +120,8 @@ export default function Categories() {
             setCatData({ name: "", emoji: "🏷️", budget: "", accountId: "" });
             toast({ title: "تم إضافة التصنيف الرئيسي" });
           },
+          onError: () =>
+            toast({ title: "تعذّر حفظ التصنيف. حاول مجددًا.", variant: "destructive" }),
         }
       );
     }
@@ -135,6 +139,8 @@ export default function Categories() {
           setSubData({ name: "", emoji: "📌" });
           toast({ title: "تم إضافة التصنيف الفرعي" });
         },
+        onError: () =>
+          toast({ title: "تعذّر حفظ التصنيف الفرعي. حاول مجددًا.", variant: "destructive" }),
       }
     );
   };
