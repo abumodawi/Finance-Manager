@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, like, inArray, sql } from "drizzle-orm";
+import { eq, and, or, like, inArray, sql } from "drizzle-orm";
 import { db, salaryTable, accountsTable, salaryAllocationsTable, categoriesTable, subcategoriesTable, transactionsTable, salaryProcessingLogTable, loansTable } from "@workspace/db";
 import {
   UpsertSalaryBody,
@@ -12,28 +12,21 @@ import {
 
 const router: IRouter = Router();
 
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 function currentMonthStr(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// Find-or-create a well-known "system" category with a single subcategory,
-// used to surface the salary remainder ("الإدخار") and the debt/installments
-// ("الديون") as real subcategories in the account breakdown. Renames are applied
-// IN PLACE (matched by known aliases and the category's existing subcategory) so
-// previously tagged deposits keep their subcategory id and simply show under the
-// new name — no reprocessing is required just to pick up a rename.
-async function ensureSystemSubcategory(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    categoryAliases: string[];
-    categoryName: string;
-    categoryEmoji: string;
-    subName: string;
-    subEmoji: string;
-  },
+// Find-or-create a well-known "system" category, renaming it IN PLACE if an older
+// alias name is found (e.g. "المتبقي من الراتب" → "الإدخار") so previously tagged
+// deposits keep their category and simply show under the new name.
+async function ensureSystemCategory(
+  tx: DbTx,
+  opts: { aliases: string[]; name: string; emoji: string },
 ): Promise<number> {
-  const names = Array.from(new Set([opts.categoryName, ...opts.categoryAliases]));
+  const names = Array.from(new Set([opts.name, ...opts.aliases]));
   let [cat] = await tx
     .select()
     .from(categoriesTable)
@@ -41,24 +34,52 @@ async function ensureSystemSubcategory(
     .orderBy(categoriesTable.id)
     .limit(1);
   if (!cat) {
-    [cat] = await tx.insert(categoriesTable).values({ name: opts.categoryName, emoji: opts.categoryEmoji }).returning();
-  } else if (cat.name !== opts.categoryName) {
+    [cat] = await tx.insert(categoriesTable).values({ name: opts.name, emoji: opts.emoji }).returning();
+  } else if (cat.name !== opts.name) {
     [cat] = await tx
       .update(categoriesTable)
-      .set({ name: opts.categoryName, emoji: opts.categoryEmoji })
+      .set({ name: opts.name, emoji: opts.emoji })
       .where(eq(categoriesTable.id, cat.id))
       .returning();
   }
-  // System categories hold exactly one subcategory; reuse it (renaming in place)
-  // so historical deposits tagged to it are preserved across renames.
+  return cat.id;
+}
+
+// Find-or-create a subcategory by name under a category (idempotent). Used for
+// per-loan debt subcategories and category-level allocation defaults.
+async function ensureNamedSubcategory(
+  tx: DbTx,
+  categoryId: number,
+  name: string,
+  emoji: string,
+): Promise<number> {
   let [sub] = await tx
     .select()
     .from(subcategoriesTable)
-    .where(eq(subcategoriesTable.categoryId, cat.id))
+    .where(and(eq(subcategoriesTable.categoryId, categoryId), eq(subcategoriesTable.name, name)))
+    .limit(1);
+  if (!sub) {
+    [sub] = await tx.insert(subcategoriesTable).values({ categoryId, name, emoji }).returning();
+  }
+  return sub.id;
+}
+
+// Ensure a system category that holds exactly ONE subcategory (e.g. savings:
+// "الإدخار" → "إدخار"), renaming both category and its single sub in place so
+// historical deposits tagged to it are preserved across renames.
+async function ensureSingleSubSystemCategory(
+  tx: DbTx,
+  opts: { aliases: string[]; categoryName: string; categoryEmoji: string; subName: string; subEmoji: string },
+): Promise<number> {
+  const catId = await ensureSystemCategory(tx, { aliases: opts.aliases, name: opts.categoryName, emoji: opts.categoryEmoji });
+  let [sub] = await tx
+    .select()
+    .from(subcategoriesTable)
+    .where(eq(subcategoriesTable.categoryId, catId))
     .orderBy(subcategoriesTable.id)
     .limit(1);
   if (!sub) {
-    [sub] = await tx.insert(subcategoriesTable).values({ categoryId: cat.id, name: opts.subName, emoji: opts.subEmoji }).returning();
+    [sub] = await tx.insert(subcategoriesTable).values({ categoryId: catId, name: opts.subName, emoji: opts.subEmoji }).returning();
   } else if (sub.name !== opts.subName) {
     [sub] = await tx
       .update(subcategoriesTable)
@@ -69,26 +90,12 @@ async function ensureSystemSubcategory(
   return sub.id;
 }
 
-// For a category-level salary allocation (no subcategory chosen), ensure a
+// For a category-level salary allocation (no subcategory chosen), tag it with a
 // stable default subcategory named after the category so the allocated amount is
-// tagged and therefore visible in the account breakdown (find-or-create by name,
-// so reprocessing is idempotent).
-async function ensureCategoryDefaultSubcategory(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  categoryId: number,
-): Promise<number> {
+// visible in the account breakdown.
+async function ensureCategoryDefaultSubcategory(tx: DbTx, categoryId: number): Promise<number> {
   const [cat] = await tx.select().from(categoriesTable).where(eq(categoriesTable.id, categoryId));
-  const defaultName = cat?.name ?? "عام";
-  const defaultEmoji = cat?.emoji ?? "📌";
-  let [sub] = await tx
-    .select()
-    .from(subcategoriesTable)
-    .where(and(eq(subcategoriesTable.categoryId, categoryId), eq(subcategoriesTable.name, defaultName)))
-    .limit(1);
-  if (!sub) {
-    [sub] = await tx.insert(subcategoriesTable).values({ categoryId, name: defaultName, emoji: defaultEmoji }).returning();
-  }
-  return sub.id;
+  return ensureNamedSubcategory(tx, categoryId, cat?.name ?? "عام", cat?.emoji ?? "📌");
 }
 
 function formatSalary(s: typeof salaryTable.$inferSelect, accountName: string | null) {
@@ -280,40 +287,34 @@ router.delete("/salary/allocations/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-router.post("/salary/process", async (req, res): Promise<void> => {
-  const parsed = ProcessSalaryBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const month = parsed.data.month || currentMonthStr();
+export type SalaryProcessingOutcome =
+  | { kind: "error"; status: number; message: string }
+  | { kind: "skip"; message: string }
+  | { kind: "done"; message: string };
+
+// Core salary processing, shared by the HTTP route and the startup backfill so
+// both apply identical rules. Deposits the FULL salary for a month, split across
+// the allocations, one per-loan debt subcategory, and the savings remainder.
+// Re-runnable: it deletes any prior salary deposits for the month (by note
+// prefix) and recreates them inside a single transaction.
+export async function runSalaryProcessing(
+  month: string,
+  opts: { skipDepositDayGuard?: boolean } = {},
+): Promise<SalaryProcessingOutcome> {
   const isCurrentMonth = month === currentMonthStr();
 
-  const salaryRows = await db
-    .select()
-    .from(salaryTable)
-    .limit(1);
-
+  const salaryRows = await db.select().from(salaryTable).limit(1);
   if (!salaryRows.length) {
-    res.status(400).json({ error: "لم يتم تهيئة الراتب بعد" });
-    return;
+    return { kind: "error", status: 400, message: "لم يتم تهيئة الراتب بعد" };
   }
-
   const salary = salaryRows[0];
   const today = new Date().getDate();
 
-  if (isCurrentMonth && today < salary.depositDay) {
-    res.json({ processed: false, alreadyProcessed: false, message: `موعد الإيداع لم يحن بعد (اليوم ${salary.depositDay} من الشهر)` });
-    return;
+  if (!opts.skipDepositDayGuard && isCurrentMonth && today < salary.depositDay) {
+    return { kind: "skip", message: `موعد الإيداع لم يحن بعد (اليوم ${salary.depositDay} من الشهر)` };
   }
-
   if (!salary.accountId) {
-    res.json({
-      processed: false,
-      alreadyProcessed: false,
-      message: "حدد حساب الإيداع في إعدادات الراتب أولاً ثم أعد المعالجة",
-    });
-    return;
+    return { kind: "skip", message: "حدد حساب الإيداع في إعدادات الراتب أولاً ثم أعد المعالجة" };
   }
 
   const accountId = salary.accountId;
@@ -346,61 +347,47 @@ router.post("/salary/process", async (req, res): Promise<void> => {
   // Guard: allocations + installments must not exceed the salary, otherwise the
   // total deposited would be larger than the salary and the balance would be wrong.
   if (committedTotal > salaryAmount + 0.009) {
-    res.json({
-      processed: false,
-      alreadyProcessed: false,
+    return {
+      kind: "skip",
       message: `مجموع التوزيعات والأقساط (${committedTotal.toFixed(2)}) أكبر من الراتب (${salaryAmount.toFixed(2)})، عدّل التوزيعات ثم أعد المعالجة`,
-    });
-    return;
+    };
   }
 
   const allocsForBudget = await db.select().from(salaryAllocationsTable);
   const remainder = salaryAmount - committedTotal;
 
-  // Processing a month is re-runnable: remove any previously created salary
-  // deposits for this month (identified by their note prefix) and recreate them.
-  // This also unblocks months that were logged as processed under older code
-  // that never actually created a deposit. All writes happen in one transaction.
   await db.transaction(async (tx) => {
-    // Serialize processing of the same month so two concurrent requests cannot
-    // both delete-and-recreate and end up with duplicate deposits. The lock is
-    // released automatically at the end of the transaction.
+    // Serialize processing of the same month so two concurrent runs cannot both
+    // delete-and-recreate and end up with duplicate deposits. Released at commit.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`salary-process-${month}`}))`);
-
-    // The remainder and the loan installments are surfaced as their own
-    // subcategories so they appear in the account breakdown (making the balance
-    // add up) and can later be transferred to another account or spent from.
-    // A global lock guards the find-or-create against races across months.
+    // Global lock guards the system category find-or-create against races.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('salary-system-subcategories'))`);
-    const remainderSubId = await ensureSystemSubcategory(tx, {
-      categoryAliases: ["المتبقي من الراتب"],
+
+    const remainderSubId = await ensureSingleSubSystemCategory(tx, {
+      aliases: ["المتبقي من الراتب"],
       categoryName: "الإدخار",
       categoryEmoji: "📥",
       subName: "إدخار",
       subEmoji: "📥",
     });
-    const debtSubId = await ensureSystemSubcategory(tx, {
-      categoryAliases: [],
-      categoryName: "الديون",
-      categoryEmoji: "🏦",
-      subName: "الأقساط",
-      subEmoji: "📄",
-    });
+    const debtCategoryId = await ensureSystemCategory(tx, { aliases: [], name: "الديون", emoji: "🏦" });
 
-    // Remove ONLY the salary deposits previously created for this month. They
-    // are deposits whose note starts with the salary prefix for this month, so
-    // manual deposits/expenses are never touched.
+    // Remove ONLY the salary deposits previously created for this month. Match
+    // the exact system-generated note shapes ("راتب {month}" or
+    // "راتب {month} - ...") so an unrelated manual note can never be caught.
     await tx
       .delete(transactionsTable)
       .where(
         and(
           eq(transactionsTable.type, "deposit"),
-          like(transactionsTable.notes, `راتب ${month}%`),
+          or(
+            eq(transactionsTable.notes, `راتب ${month}`),
+            like(transactionsTable.notes, `راتب ${month} - %`),
+          ),
         ),
       );
 
-    // One categorized deposit per allocation so each shows up in the operations
-    // list, the account statement, and as "received" per subcategory.
+    // One categorized deposit per allocation.
     for (const alloc of positiveAllocations) {
       const label = alloc.subcategoryName ?? alloc.categoryName ?? "";
       // Category-level allocations (no subcategory) get a stable default
@@ -416,24 +403,23 @@ router.post("/salary/process", async (req, res): Promise<void> => {
       });
     }
 
-    // One deposit per active loan under the "الديون" subcategory so the debt
-    // portion is visible in the breakdown and can be moved/spent later.
+    // One deposit per active loan, tagged to a subcategory NAMED AFTER THE LOAN
+    // (under "الديون") so different debts stay distinguishable in the breakdown.
     for (const loan of activeLoans) {
       if (!(parseFloat(loan.monthlyInstallment) > 0)) continue;
+      const loanSubId = await ensureNamedSubcategory(tx, debtCategoryId, loan.name, "📄");
       await tx.insert(transactionsTable).values({
         type: "deposit",
         amount: loan.monthlyInstallment,
         date: dateStr,
         accountId,
-        subcategoryId: debtSubId,
+        subcategoryId: loanSubId,
         notes: `راتب ${month} - قسط ${loan.name}`,
       });
     }
 
-    // Deposit any unallocated remainder under the "المتبقي من الراتب"
-    // subcategory so the account balance equals the full salary and the leftover
-    // can be transferred or spent later. If nothing was committed, this is the
-    // entire salary.
+    // Deposit any unallocated remainder under "الإدخار" so the account balance
+    // equals the full salary. If nothing was committed, this is the whole salary.
     if (remainder > 0.009) {
       await tx.insert(transactionsTable).values({
         type: "deposit",
@@ -453,11 +439,43 @@ router.post("/salary/process", async (req, res): Promise<void> => {
         .where(eq(categoriesTable.id, alloc.categoryId));
     }
 
+    // Remove the legacy shared "الأقساط" subcategory once it holds no
+    // transactions (loans now use per-loan subcategories). Safe: only deleted
+    // when empty, so any manual data under it is preserved.
+    const legacyDebtSubs = await tx
+      .select()
+      .from(subcategoriesTable)
+      .where(and(eq(subcategoriesTable.categoryId, debtCategoryId), eq(subcategoriesTable.name, "الأقساط")));
+    for (const s of legacyDebtSubs) {
+      const [{ n }] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(transactionsTable)
+        .where(eq(transactionsTable.subcategoryId, s.id));
+      if (Number(n) === 0) {
+        await tx.delete(subcategoriesTable).where(eq(subcategoriesTable.id, s.id));
+      }
+    }
+
     // Record the processing (idempotent — ignore if the month is already logged).
     await tx.insert(salaryProcessingLogTable).values({ processedMonth: month }).onConflictDoNothing();
   });
 
-  res.json({ processed: true, alreadyProcessed: false, message: `تم إيداع راتب ${month} كاملاً في الحساب وتوزيعه على التصنيفات والأقساط` });
+  return { kind: "done", message: `تم إيداع راتب ${month} كاملاً في الحساب وتوزيعه على التصنيفات والأقساط` };
+}
+
+router.post("/salary/process", async (req, res): Promise<void> => {
+  const parsed = ProcessSalaryBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const month = parsed.data.month || currentMonthStr();
+  const outcome = await runSalaryProcessing(month);
+  if (outcome.kind === "error") {
+    res.status(outcome.status).json({ error: outcome.message });
+    return;
+  }
+  res.json({ processed: outcome.kind === "done", alreadyProcessed: false, message: outcome.message });
 });
 
 export default router;

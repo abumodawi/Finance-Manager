@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { runStartupBackfill } from "./lib/backfill";
 
 const rawPort = process.env["PORT"];
 
@@ -14,6 +15,10 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// Fire-and-forget one-time data healer so a deploy applies the latest salary
+// processing rules to existing months without blocking startup.
+void runStartupBackfill();
 
 app.listen(port, (err) => {
   if (err) {
