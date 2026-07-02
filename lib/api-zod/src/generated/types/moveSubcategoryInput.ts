@@ -10,4 +10,6 @@ export interface MoveSubcategoryInput {
   subcategoryId: number;
   fromAccountId: number;
   toAccountId: number;
+  /** Optional partial amount to transfer. If omitted, the entire subcategory balance is moved. */
+  amount?: number;
 }

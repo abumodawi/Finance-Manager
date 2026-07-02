@@ -866,6 +866,9 @@ components:
         subcategoryId: { type: integer }
         fromAccountId: { type: integer }
         toAccountId:   { type: integer }
+        amount:
+          type: number
+          description: "Optional partial amount to transfer. If omitted, the entire subcategory balance is moved."
 
     MoveSubcategoryResult:
       type: object

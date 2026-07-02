@@ -9,9 +9,13 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatCurrency } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { ArrowRight, ArrowLeftRight, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,11 +35,15 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const handleMoveSubcategory = (subcategoryId: number, toAccountId: string) => {
-    const target = parseInt(toAccountId);
+  const handleMoveSubcategory = (
+    subcategoryId: number,
+    target: number,
+    amount: number | undefined,
+    onDone?: () => void,
+  ) => {
     if (isNaN(target) || target === accountId) return;
     moveFunds.mutate(
-      { data: { subcategoryId, fromAccountId: accountId, toAccountId: target } },
+      { data: { subcategoryId, fromAccountId: accountId, toAccountId: target, ...(amount != null ? { amount } : {}) } },
       {
         onSuccess: (result) => {
           if (result.moved === 0) {
@@ -46,7 +54,8 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
           queryClient.invalidateQueries({ queryKey: getGetAccountBreakdownQueryKey({ accountId: target }) });
           queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "تم نقل التصنيف الفرعي إلى الحساب الآخر" });
+          toast({ title: "تم نقل المبلغ إلى الحساب الآخر" });
+          onDone?.();
         },
         onError: () => toast({ title: "حدث خطأ أثناء النقل", variant: "destructive" }),
       }
@@ -151,17 +160,12 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
                         >
                           {formatCurrency(sub.net)}
                         </span>
-                        <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <Select value={String(accountId)} onValueChange={(v) => handleMoveSubcategory(sub.id, v)}>
-                          <SelectTrigger className="h-8 w-24 text-xs shrink-0" title="نقل إلى حساب آخر">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent position="popper" side="bottom" avoidCollisions={false}>
-                            {accounts?.map((acc) => (
-                              <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <TransferPopover
+                          sub={sub}
+                          accounts={(accounts ?? []).filter((a) => a.id !== accountId)}
+                          isPending={moveFunds.isPending}
+                          onTransfer={(target, amount, onDone) => handleMoveSubcategory(sub.id, target, amount, onDone)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -172,5 +176,106 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
         </div>
       )}
     </div>
+  );
+}
+
+interface TransferPopoverProps {
+  sub: { id: number; name: string; net: number };
+  accounts: { id: number; name: string }[];
+  isPending: boolean;
+  onTransfer: (target: number, amount: number | undefined, onDone: () => void) => void;
+}
+
+function TransferPopover({ sub, accounts, isPending, onTransfer }: TransferPopoverProps) {
+  const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState("");
+  const [amount, setAmount] = useState("");
+  const max = Math.max(sub.net, 0);
+
+  const reset = () => {
+    setTarget("");
+    setAmount("");
+  };
+
+  const handleOpenChange = (o: boolean) => {
+    setOpen(o);
+    if (o) {
+      setAmount(max > 0 ? String(max) : "");
+    } else {
+      reset();
+    }
+  };
+
+  const parsedAmount = parseFloat(amount);
+  const validAmount = !isNaN(parsedAmount) && parsedAmount > 0 && parsedAmount <= max + 0.0001;
+  const canSubmit = target !== "" && validAmount && max > 0;
+
+  const submit = () => {
+    if (!canSubmit) return;
+    const full = parsedAmount >= max - 0.0001;
+    onTransfer(parseInt(target), full ? undefined : parsedAmount, () => handleOpenChange(false));
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-8 px-2 gap-1 text-xs shrink-0" title="نقل إلى حساب آخر">
+          <ArrowLeftRight className="h-3.5 w-3.5" />
+          نقل
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" side="bottom" avoidCollisions={false} className="w-64 space-y-3">
+        <div className="space-y-1">
+          <p className="text-sm font-bold">نقل «{sub.name}»</p>
+          <p className="text-xs text-muted-foreground">المتاح: {formatCurrency(max)}</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">إلى حساب</Label>
+          <Select value={target} onValueChange={setTarget}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="اختر الحساب" />
+            </SelectTrigger>
+            <SelectContent position="popper" side="bottom" avoidCollisions={false}>
+              {accounts.map((acc) => (
+                <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">المبلغ</Label>
+          <div className="flex gap-1.5">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={max}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-9 text-sm"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0 text-xs"
+              onClick={() => setAmount(String(max))}
+            >
+              الكل
+            </Button>
+          </div>
+          {amount !== "" && !validAmount && (
+            <p className="text-xs text-destructive">أدخل مبلغاً بين 0 و {formatCurrency(max)}</p>
+          )}
+        </div>
+
+        <Button className="w-full h-9" disabled={!canSubmit || isPending} onClick={submit}>
+          {isPending ? "جارٍ النقل..." : "تأكيد النقل"}
+        </Button>
+      </PopoverContent>
+    </Popover>
   );
 }

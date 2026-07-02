@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { db, transactionsTable, subcategoriesTable, categoriesTable, accountsTable } from "@workspace/db";
 import {
   CreateTransactionBody,
@@ -129,7 +129,7 @@ router.post("/transactions/move", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { subcategoryId, fromAccountId, toAccountId } = parsed.data;
+  const { subcategoryId, fromAccountId, toAccountId, amount } = parsed.data;
 
   if (fromAccountId === toAccountId) {
     res.status(400).json({ error: "الحساب المصدر والوجهة متطابقان" });
@@ -141,24 +141,82 @@ router.post("/transactions/move", async (req, res): Promise<void> => {
     res.status(404).json({ error: "التصنيف الفرعي غير موجود" });
     return;
   }
+  const [fromAccount] = await db.select().from(accountsTable).where(eq(accountsTable.id, fromAccountId));
   const [toAccount] = await db.select().from(accountsTable).where(eq(accountsTable.id, toAccountId));
-  if (!toAccount) {
-    res.status(404).json({ error: "الحساب الوجهة غير موجود" });
+  if (!fromAccount || !toAccount) {
+    res.status(404).json({ error: "الحساب غير موجود" });
     return;
   }
 
-  const moved = await db
-    .update(transactionsTable)
-    .set({ accountId: toAccountId })
-    .where(
-      and(
-        eq(transactionsTable.accountId, fromAccountId),
-        eq(transactionsTable.subcategoryId, subcategoryId),
-      ),
-    )
-    .returning({ id: transactionsTable.id });
+  // Normalize the requested amount to currency precision (2 decimals) so
+  // comparisons against the available balance are deterministic.
+  const requested = amount == null ? null : Math.round(amount * 100) / 100;
+  if (requested != null && requested <= 0) {
+    res.status(400).json({ error: "المبلغ يجب أن يكون أكبر من صفر" });
+    return;
+  }
 
-  res.json({ moved: moved.length });
+  // Do the read (available balance) AND the mutation inside ONE transaction,
+  // guarded by an advisory lock scoped to this (source account, subcategory).
+  // This serializes concurrent moves so two partial transfers can never both
+  // pass validation and overdraw the same balance.
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`subcat-move-${fromAccountId}-${subcategoryId}`}))`);
+
+    const sourceRows = await tx
+      .select({ type: transactionsTable.type, amount: transactionsTable.amount })
+      .from(transactionsTable)
+      .where(and(eq(transactionsTable.accountId, fromAccountId), eq(transactionsTable.subcategoryId, subcategoryId)));
+
+    const available =
+      Math.round(
+        sourceRows.reduce(
+          (sum, t) => sum + (t.type === "deposit" ? parseFloat(t.amount) : -parseFloat(t.amount)),
+          0,
+        ) * 100,
+      ) / 100;
+
+    if (available <= 0) {
+      return { moved: 0 };
+    }
+
+    // No amount, or an amount that covers (or exceeds) the whole balance → move
+    // everything by reassigning the transactions (no leftover, keeps history).
+    if (requested == null || requested >= available) {
+      const moved = await tx
+        .update(transactionsTable)
+        .set({ accountId: toAccountId })
+        .where(and(eq(transactionsTable.accountId, fromAccountId), eq(transactionsTable.subcategoryId, subcategoryId)))
+        .returning({ id: transactionsTable.id });
+      return { moved: moved.length };
+    }
+
+    // Partial transfer: keep the remainder in the source account by creating a
+    // balancing pair — an expense in the source and a deposit in the target,
+    // both tagged to the same subcategory. Same transaction, so the money can
+    // never be duplicated or lost midway.
+    const today = new Date().toISOString().slice(0, 10);
+    const value = requested.toFixed(2);
+    await tx.insert(transactionsTable).values({
+      type: "expense",
+      amount: value,
+      date: today,
+      accountId: fromAccountId,
+      subcategoryId,
+      notes: `تحويل إلى ${toAccount.name}`,
+    });
+    await tx.insert(transactionsTable).values({
+      type: "deposit",
+      amount: value,
+      date: today,
+      accountId: toAccountId,
+      subcategoryId,
+      notes: `تحويل من ${fromAccount.name}`,
+    });
+    return { moved: 2 };
+  });
+
+  res.json(outcome);
 });
 
 router.delete("/transactions/:id", async (req, res): Promise<void> => {

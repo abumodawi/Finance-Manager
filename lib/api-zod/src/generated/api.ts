@@ -617,7 +617,8 @@ export const DeleteTransactionResponse = zod.void()
 export const MoveSubcategoryFundsBody = zod.object({
   "subcategoryId": zod.number(),
   "fromAccountId": zod.number(),
-  "toAccountId": zod.number()
+  "toAccountId": zod.number(),
+  "amount": zod.number().optional().describe('Optional partial amount to transfer. If omitted, the entire subcategory balance is moved.')
 })
 
 export const MoveSubcategoryFundsResponse = zod.object({
