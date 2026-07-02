@@ -47,3 +47,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Vercel serverless build output (generated at deploy time).
+# Keep the committed catch-all entry (api/[...path].js); ignore the bundle.
+/api/_server.cjs
+/api/_server.cjs.map
+.vercel/

@@ -1,3 +1,4 @@
 - [Date columns vs zod coerce](date-columns-zod-coerce.md) — DB date cols are string-mode but codegen zod uses coerce.date(); convert to YYYY-MM-DD (`toISOString().slice(0,10)`) on writes.
+- [Vercel deployment](vercel-deployment.md) — single Vercel project; API via committed catch-all `api/[...path].js` requiring generated `_server.cjs` bundle (not a rewrite); SPA fallback; DB_POOL_MAX for serverless.
 - [Salary processing deposits](salary-processing-deposits.md) — re-runnable runSalaryProcessing(); full salary split into category/remainder subs + PER-LOAN debt subs; deploy-time auto-backfill reprocesses existing months.
 - [Account breakdown & transfers](account-breakdown-transfers.md) — balances/breakdown are transaction.accountId based; transfer = move a subcategory's transactions between accounts.
