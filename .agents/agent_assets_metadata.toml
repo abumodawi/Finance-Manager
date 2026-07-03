@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "WxnnZ91HhkeOGeODgGoxl"
+uri = "file://backups/neon-backup-2026-07-03.tar.gz"
+type = "unspecified"
+title = "نسخة احتياطية من بياناتك (كل الجداول CSV)"
