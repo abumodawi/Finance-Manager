@@ -4,9 +4,15 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
+// Prefer NEON_DATABASE_URL when present (external Neon Postgres); fall back to
+// the platform-managed DATABASE_URL. This lets us point the app at Neon without
+// overwriting the runtime-managed DATABASE_URL secret.
+const connectionString =
+  process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!connectionString) {
   throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
+    "NEON_DATABASE_URL or DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
 
@@ -18,7 +24,7 @@ const poolMax = process.env.DB_POOL_MAX
   : undefined;
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   ...(poolMax && Number.isFinite(poolMax) ? { max: poolMax } : {}),
 });
 export const db = drizzle(pool, { schema });
