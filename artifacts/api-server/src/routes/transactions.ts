@@ -129,7 +129,7 @@ router.post("/transactions/move", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { subcategoryId, fromAccountId, toAccountId, amount } = parsed.data;
+  const { subcategoryId, fromAccountId, toAccountId, toSubcategoryId, amount } = parsed.data;
 
   if (fromAccountId === toAccountId) {
     res.status(400).json({ error: "الحساب المصدر والوجهة متطابقان" });
@@ -141,6 +141,18 @@ router.post("/transactions/move", async (req, res): Promise<void> => {
     res.status(404).json({ error: "التصنيف الفرعي غير موجود" });
     return;
   }
+
+  // Optional destination subcategory. When provided, the moved funds are
+  // re-tagged to it in the target account; when omitted they keep their
+  // original subcategory.
+  if (toSubcategoryId != null) {
+    const [targetSub] = await db.select().from(subcategoriesTable).where(eq(subcategoriesTable.id, toSubcategoryId));
+    if (!targetSub) {
+      res.status(404).json({ error: "التصنيف الفرعي الوجهة غير موجود" });
+      return;
+    }
+  }
+  const destSubcategoryId = toSubcategoryId ?? subcategoryId;
   const [fromAccount] = await db.select().from(accountsTable).where(eq(accountsTable.id, fromAccountId));
   const [toAccount] = await db.select().from(accountsTable).where(eq(accountsTable.id, toAccountId));
   if (!fromAccount || !toAccount) {
@@ -185,7 +197,7 @@ router.post("/transactions/move", async (req, res): Promise<void> => {
     if (requested == null || requested >= available) {
       const moved = await tx
         .update(transactionsTable)
-        .set({ accountId: toAccountId })
+        .set({ accountId: toAccountId, subcategoryId: destSubcategoryId })
         .where(and(eq(transactionsTable.accountId, fromAccountId), eq(transactionsTable.subcategoryId, subcategoryId)))
         .returning({ id: transactionsTable.id });
       return { moved: moved.length };
@@ -210,7 +222,7 @@ router.post("/transactions/move", async (req, res): Promise<void> => {
       amount: value,
       date: today,
       accountId: toAccountId,
-      subcategoryId,
+      subcategoryId: destSubcategoryId,
       notes: `تحويل من ${fromAccount.name}`,
     });
     return { moved: 2 };

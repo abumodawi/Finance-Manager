@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import {
   useGetAccountBreakdown,
   useListAccounts,
+  useListCategories,
   useMoveSubcategoryFunds,
   getListAccountsQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -31,19 +32,36 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
     }
   );
   const { data: accounts } = useListAccounts();
+  const { data: allCategories } = useListCategories();
   const moveFunds = useMoveSubcategoryFunds();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const subcategoryOptions = (allCategories ?? []).flatMap((c) =>
+    (c.subcategories ?? []).map((s) => ({
+      id: s.id,
+      label: `${c.emoji} ${c.name} › ${s.emoji} ${s.name}`,
+    })),
+  );
 
   const handleMoveSubcategory = (
     subcategoryId: number,
     target: number,
     amount: number | undefined,
+    toSubcategoryId: number | undefined,
     onDone?: () => void,
   ) => {
     if (isNaN(target) || target === accountId) return;
     moveFunds.mutate(
-      { data: { subcategoryId, fromAccountId: accountId, toAccountId: target, ...(amount != null ? { amount } : {}) } },
+      {
+        data: {
+          subcategoryId,
+          fromAccountId: accountId,
+          toAccountId: target,
+          ...(toSubcategoryId != null ? { toSubcategoryId } : {}),
+          ...(amount != null ? { amount } : {}),
+        },
+      },
       {
         onSuccess: (result) => {
           if (result.moved === 0) {
@@ -163,8 +181,11 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
                         <TransferPopover
                           sub={sub}
                           accounts={(accounts ?? []).filter((a) => a.id !== accountId)}
+                          subcategoryOptions={subcategoryOptions}
                           isPending={moveFunds.isPending}
-                          onTransfer={(target, amount, onDone) => handleMoveSubcategory(sub.id, target, amount, onDone)}
+                          onTransfer={(target, amount, toSubcategoryId, onDone) =>
+                            handleMoveSubcategory(sub.id, target, amount, toSubcategoryId, onDone)
+                          }
                         />
                       </div>
                     ))}
@@ -182,18 +203,28 @@ export default function AccountDetail({ params }: { params: { id: string } }) {
 interface TransferPopoverProps {
   sub: { id: number; name: string; net: number };
   accounts: { id: number; name: string }[];
+  subcategoryOptions: { id: number; label: string }[];
   isPending: boolean;
-  onTransfer: (target: number, amount: number | undefined, onDone: () => void) => void;
+  onTransfer: (
+    target: number,
+    amount: number | undefined,
+    toSubcategoryId: number | undefined,
+    onDone: () => void,
+  ) => void;
 }
 
-function TransferPopover({ sub, accounts, isPending, onTransfer }: TransferPopoverProps) {
+const KEEP_SAME = "same";
+
+function TransferPopover({ sub, accounts, subcategoryOptions, isPending, onTransfer }: TransferPopoverProps) {
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState("");
+  const [toSub, setToSub] = useState(KEEP_SAME);
   const [amount, setAmount] = useState("");
   const max = Math.max(sub.net, 0);
 
   const reset = () => {
     setTarget("");
+    setToSub(KEEP_SAME);
     setAmount("");
   };
 
@@ -213,7 +244,8 @@ function TransferPopover({ sub, accounts, isPending, onTransfer }: TransferPopov
   const submit = () => {
     if (!canSubmit) return;
     const full = parsedAmount >= max - 0.0001;
-    onTransfer(parseInt(target), full ? undefined : parsedAmount, () => handleOpenChange(false));
+    const toSubcategoryId = toSub === KEEP_SAME ? undefined : parseInt(toSub);
+    onTransfer(parseInt(target), full ? undefined : parsedAmount, toSubcategoryId, () => handleOpenChange(false));
   };
 
   return (
@@ -239,6 +271,21 @@ function TransferPopover({ sub, accounts, isPending, onTransfer }: TransferPopov
             <SelectContent position="popper" side="bottom" avoidCollisions={false}>
               {accounts.map((acc) => (
                 <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">التصنيف الوجهة</Label>
+          <Select value={toSub} onValueChange={setToSub}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder="نفس التصنيف" />
+            </SelectTrigger>
+            <SelectContent position="popper" side="bottom" avoidCollisions={false} className="max-h-56">
+              <SelectItem value={KEEP_SAME}>نفس التصنيف</SelectItem>
+              {subcategoryOptions.map((opt) => (
+                <SelectItem key={opt.id} value={String(opt.id)}>{opt.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

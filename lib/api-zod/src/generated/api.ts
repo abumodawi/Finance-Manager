@@ -618,6 +618,7 @@ export const MoveSubcategoryFundsBody = zod.object({
   "subcategoryId": zod.number(),
   "fromAccountId": zod.number(),
   "toAccountId": zod.number(),
+  "toSubcategoryId": zod.number().optional().describe('Optional target subcategory in the destination account. If omitted, the funds keep their original subcategory.'),
   "amount": zod.number().optional().describe('Optional partial amount to transfer. If omitted, the entire subcategory balance is moved.')
 })
 

@@ -285,8 +285,6 @@ router.get("/summary/account-breakdown", async (req, res): Promise<void> => {
         .filter((s) => s.categoryId === cat.id && aggMap.has(s.id))
         .map((s) => {
           const a = aggMap.get(s.id) ?? { received: 0, spent: 0 };
-          totalReceived += a.received;
-          totalSpent += a.spent;
           return {
             id: s.id,
             name: s.name,
@@ -295,7 +293,14 @@ router.get("/summary/account-breakdown", async (req, res): Promise<void> => {
             spent: a.spent,
             net: a.received - a.spent,
           };
-        });
+        })
+        // Hide subcategories whose remaining balance is zero (e.g. fully spent
+        // or fully transferred out), so they no longer clutter the account.
+        .filter((s) => Math.abs(s.net) > 0.005);
+      for (const s of catSubs) {
+        totalReceived += s.received;
+        totalSpent += s.spent;
+      }
       return {
         id: cat.id,
         name: cat.name,
@@ -305,7 +310,7 @@ router.get("/summary/account-breakdown", async (req, res): Promise<void> => {
     })
     .filter((c) => c.subcategories.length > 0);
 
-  if (uncategorized.received > 0.0001 || uncategorized.spent > 0.0001) {
+  if (Math.abs(uncategorized.received - uncategorized.spent) > 0.005) {
     totalReceived += uncategorized.received;
     totalSpent += uncategorized.spent;
     categories.push({

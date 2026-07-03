@@ -5,3 +5,4 @@
 - [Inline base64 images & body limits](inline-base64-images.md) — images stored as inline base64 data URLs; needs raised express body limit (10mb) + onError on forms or saves fail silently (413).
 - [Neon DATABASE_URL precedence](neon-database-url-precedence.md) — app+drizzle use NEON_DATABASE_URL ?? DATABASE_URL (built-in is runtime-managed/unremovable); migrate DBs from bash (sandbox lacks new secrets).
 - [Replit autoscale deploy health](replit-deploy-health.md) — promote gates on /api/healthz not base /api; "healthcheck /api 500" is noise; a failed build often just predates the fix — check build time vs git log.
+- [Root package.json guard](root-package-json-guard.md) — root package.json must stay the "workspace" orchestration manifest; never let it get overwritten with an artifact's config (breaks pnpm topology & masks typecheck).
