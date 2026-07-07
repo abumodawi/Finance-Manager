@@ -228,6 +228,8 @@ export interface Transaction {
   date: string;
   accountId: number;
   /** @nullable */
+  accountName?: string | null;
+  /** @nullable */
   subcategoryId?: number | null;
   /** @nullable */
   subcategoryName?: string | null;
@@ -235,6 +237,8 @@ export interface Transaction {
   categoryName?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  runningBalance?: number | null;
   createdAt: string;
 }
 

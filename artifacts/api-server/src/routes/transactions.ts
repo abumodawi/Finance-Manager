@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
 import { db, transactionsTable, subcategoriesTable, categoriesTable, accountsTable } from "@workspace/db";
 import {
   CreateTransactionBody,
@@ -63,12 +63,74 @@ router.get("/transactions", async (req, res): Promise<void> => {
   }
 
   const rows = await db
-    .select()
+    .select({
+      id: transactionsTable.id,
+      type: transactionsTable.type,
+      amount: transactionsTable.amount,
+      date: transactionsTable.date,
+      accountId: transactionsTable.accountId,
+      subcategoryId: transactionsTable.subcategoryId,
+      notes: transactionsTable.notes,
+      createdAt: transactionsTable.createdAt,
+      accountName: accountsTable.name,
+      initialBalance: accountsTable.initialBalance,
+      subName: subcategoriesTable.name,
+      catName: categoriesTable.name,
+    })
     .from(transactionsTable)
+    .leftJoin(accountsTable, eq(transactionsTable.accountId, accountsTable.id))
+    .leftJoin(subcategoriesTable, eq(transactionsTable.subcategoryId, subcategoriesTable.id))
+    .leftJoin(categoriesTable, eq(subcategoriesTable.categoryId, categoriesTable.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(transactionsTable.date, transactionsTable.createdAt);
 
-  const enriched = await Promise.all(rows.map(enrichTransaction));
+  // Running balance is per-account and reflects the account balance right AFTER
+  // each transaction. When a month filter is set, each account's opening balance
+  // is its initial balance plus every earlier transaction, so the running total
+  // continues correctly from prior months.
+  const priorByAccount = new Map<number, number>();
+  if (qp.data.month != null) {
+    const [year, month] = qp.data.month.split("-");
+    const start = `${year}-${month}-01`;
+    const priorConds = [lt(transactionsTable.date, start)];
+    if (qp.data.accountId != null) {
+      priorConds.push(eq(transactionsTable.accountId, qp.data.accountId));
+    }
+    const priorRows = await db
+      .select({
+        accountId: transactionsTable.accountId,
+        total: sql<string>`COALESCE(SUM(CASE WHEN type = 'deposit' THEN amount::numeric ELSE -amount::numeric END), 0)`,
+      })
+      .from(transactionsTable)
+      .where(and(...priorConds))
+      .groupBy(transactionsTable.accountId);
+    for (const p of priorRows) priorByAccount.set(p.accountId, parseFloat(p.total));
+  }
+
+  const runningByAccount = new Map<number, number>();
+  const enriched = rows.map((t) => {
+    const amount = parseFloat(t.amount);
+    if (!runningByAccount.has(t.accountId)) {
+      const opening = parseFloat(t.initialBalance ?? "0") + (priorByAccount.get(t.accountId) ?? 0);
+      runningByAccount.set(t.accountId, opening);
+    }
+    const next = runningByAccount.get(t.accountId)! + (t.type === "deposit" ? amount : -amount);
+    runningByAccount.set(t.accountId, next);
+    return {
+      id: t.id,
+      type: t.type,
+      amount,
+      date: t.date,
+      accountId: t.accountId,
+      accountName: t.accountName ?? null,
+      subcategoryId: t.subcategoryId ?? null,
+      subcategoryName: t.subName ?? null,
+      categoryName: t.catName ?? null,
+      notes: t.notes ?? null,
+      runningBalance: Math.round(next * 100) / 100,
+      createdAt: t.createdAt.toISOString(),
+    };
+  });
   res.json(enriched);
 });
 

@@ -528,10 +528,12 @@ export const ListTransactionsResponseItem = zod.object({
   "amount": zod.number(),
   "date": zod.coerce.date(),
   "accountId": zod.number(),
+  "accountName": zod.string().nullish(),
   "subcategoryId": zod.number().nullish(),
   "subcategoryName": zod.string().nullish(),
   "categoryName": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "runningBalance": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem)
@@ -559,10 +561,12 @@ export const CreateTransactionResponse = zod.object({
   "amount": zod.number(),
   "date": zod.coerce.date(),
   "accountId": zod.number(),
+  "accountName": zod.string().nullish(),
   "subcategoryId": zod.number().nullish(),
   "subcategoryName": zod.string().nullish(),
   "categoryName": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "runningBalance": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -593,10 +597,12 @@ export const UpdateTransactionResponse = zod.object({
   "amount": zod.number(),
   "date": zod.coerce.date(),
   "accountId": zod.number(),
+  "accountName": zod.string().nullish(),
   "subcategoryId": zod.number().nullish(),
   "subcategoryName": zod.string().nullish(),
   "categoryName": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "runningBalance": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 

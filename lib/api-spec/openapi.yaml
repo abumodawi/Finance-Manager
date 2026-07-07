@@ -832,10 +832,12 @@ components:
         amount:          { type: number }
         date:            { type: string, format: date }
         accountId:       { type: integer }
+        accountName:     { type: ["string", "null"] }
         subcategoryId:   { type: ["integer", "null"] }
         subcategoryName: { type: ["string", "null"] }
         categoryName:    { type: ["string", "null"] }
         notes:           { type: ["string", "null"] }
+        runningBalance:  { type: ["number", "null"] }
         createdAt:       { type: string, format: date-time }
 
     TransactionInput:

@@ -102,19 +102,35 @@ export default function Transactions() {
   // "الراتب" row so the operations list stays readable.
   const displayRows = useMemo(() => {
     const list = transactions ?? [];
-    const groups = new Map<string, { date: string; amount: number; ids: number[] }>();
+    const groups = new Map<
+      string,
+      { date: string; amount: number; ids: number[]; accountName: string | null; runningBalance: number | null }
+    >();
     for (const tx of list) {
       const m = salaryMonthOf(tx);
       if (!m) continue;
-      const g = groups.get(m) ?? { date: tx.date, amount: 0, ids: [] };
+      const g =
+        groups.get(m) ??
+        { date: tx.date, amount: 0, ids: [], accountName: tx.accountName ?? null, runningBalance: tx.runningBalance ?? null };
       g.amount += tx.amount;
       g.ids.push(tx.id);
+      // rows arrive in chronological order, so the last salary deposit carries
+      // the account balance right after the whole salary was credited.
+      g.runningBalance = tx.runningBalance ?? g.runningBalance;
       groups.set(m, g);
     }
     const emitted = new Set<string>();
     const rows: Array<
       | { kind: "tx"; tx: (typeof list)[number] }
-      | { kind: "salary"; key: string; date: string; amount: number; ids: number[] }
+      | {
+          kind: "salary";
+          key: string;
+          date: string;
+          amount: number;
+          ids: number[];
+          accountName: string | null;
+          runningBalance: number | null;
+        }
     > = [];
     for (const tx of list) {
       const m = salaryMonthOf(tx);
@@ -122,7 +138,15 @@ export default function Transactions() {
         if (!emitted.has(m)) {
           emitted.add(m);
           const g = groups.get(m)!;
-          rows.push({ kind: "salary", key: `salary-${m}`, date: g.date, amount: g.amount, ids: g.ids });
+          rows.push({
+            kind: "salary",
+            key: `salary-${m}`,
+            date: g.date,
+            amount: g.amount,
+            ids: g.ids,
+            accountName: g.accountName,
+            runningBalance: g.runningBalance,
+          });
         }
       } else {
         rows.push({ kind: "tx", tx });
@@ -241,61 +265,82 @@ export default function Transactions() {
       </div>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {isLoading ? (
             <div className="divide-y">
               {[1,2,3,4].map(i => <div key={i} className="h-16 animate-pulse bg-muted/50" />)}
             </div>
           ) : (
-            <div className="divide-y">
-              {displayRows.map((row) =>
-                row.kind === "salary" ? (
-                  <div key={row.key} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors group">
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded-full bg-green-600/10 text-green-600">
-                        <ArrowDownCircle className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-base">الراتب</div>
-                        <div className="text-sm text-muted-foreground">{formatDate(row.date)}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="font-bold text-lg text-green-600">+{formatCurrency(row.amount)}</div>
-                      <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDeleteSalary(row.ids)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={row.tx.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors group">
-                    <div className="flex items-center gap-4">
-                      <div className={cn("p-2 rounded-full", row.tx.type === "expense" ? "bg-destructive/10 text-destructive" : "bg-green-600/10 text-green-600")}>
-                        {row.tx.type === "expense" ? <ArrowUpCircle className="h-6 w-6" /> : <ArrowDownCircle className="h-6 w-6" />}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-base">
-                          {row.tx.subcategoryName ?? (row.tx.type === "expense" ? "مصروف" : "إيداع")}
-                          {row.tx.notes && <span className="text-sm font-normal text-muted-foreground mr-2">({row.tx.notes})</span>}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/30 text-right">
+                  <th className="p-3 font-medium w-10"></th>
+                  <th className="p-3 font-medium whitespace-nowrap">التاريخ</th>
+                  <th className="p-3 font-medium whitespace-nowrap">المبلغ</th>
+                  <th className="p-3 font-medium whitespace-nowrap">الحساب البنكي</th>
+                  <th className="p-3 font-medium whitespace-nowrap">التصنيف</th>
+                  <th className="p-3 font-medium whitespace-nowrap">الرصيد</th>
+                  <th className="p-3 font-medium">ملاحظات</th>
+                  <th className="p-3 font-medium w-10"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {displayRows.map((row) =>
+                  row.kind === "salary" ? (
+                    <tr key={row.key} className="hover:bg-muted/20 transition-colors group">
+                      <td className="p-3">
+                        <div className="p-1.5 rounded-full bg-green-600/10 text-green-600 w-fit">
+                          <ArrowDownCircle className="h-5 w-5" />
                         </div>
-                        <div className="text-sm text-muted-foreground">{formatDate(row.tx.date)}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className={cn("font-bold text-lg", row.tx.type === "expense" ? "text-destructive" : "text-green-600")}>
+                      </td>
+                      <td className="p-3 text-muted-foreground whitespace-nowrap">{formatDate(row.date)}</td>
+                      <td className="p-3 font-bold text-green-600 whitespace-nowrap">+{formatCurrency(row.amount)}</td>
+                      <td className="p-3 whitespace-nowrap">{row.accountName ?? "-"}</td>
+                      <td className="p-3 font-medium whitespace-nowrap">الراتب</td>
+                      <td className="p-3 font-bold whitespace-nowrap bg-muted/10">
+                        {row.runningBalance != null ? formatCurrency(row.runningBalance) : "-"}
+                      </td>
+                      <td className="p-3 text-muted-foreground">-</td>
+                      <td className="p-3">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDeleteSalary(row.ids)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={row.tx.id} className="hover:bg-muted/20 transition-colors group">
+                      <td className="p-3">
+                        <div className={cn("p-1.5 rounded-full w-fit", row.tx.type === "expense" ? "bg-destructive/10 text-destructive" : "bg-green-600/10 text-green-600")}>
+                          {row.tx.type === "expense" ? <ArrowUpCircle className="h-5 w-5" /> : <ArrowDownCircle className="h-5 w-5" />}
+                        </div>
+                      </td>
+                      <td className="p-3 text-muted-foreground whitespace-nowrap">{formatDate(row.tx.date)}</td>
+                      <td className={cn("p-3 font-bold whitespace-nowrap", row.tx.type === "expense" ? "text-destructive" : "text-green-600")}>
                         {row.tx.type === "expense" ? "-" : "+"}{formatCurrency(row.tx.amount)}
-                      </div>
-                      <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDelete(row.tx.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )
-              )}
-              {displayRows.length === 0 && (
-                <div className="p-12 text-center text-muted-foreground">لا توجد عمليات في هذا الشهر</div>
-              )}
-            </div>
+                      </td>
+                      <td className="p-3 whitespace-nowrap">{row.tx.accountName ?? "-"}</td>
+                      <td className="p-3 font-medium whitespace-nowrap">
+                        {row.tx.subcategoryName ?? (row.tx.type === "expense" ? "مصروف" : "إيداع")}
+                      </td>
+                      <td className="p-3 font-bold whitespace-nowrap bg-muted/10">
+                        {row.tx.runningBalance != null ? formatCurrency(row.tx.runningBalance) : "-"}
+                      </td>
+                      <td className="p-3 text-muted-foreground max-w-[200px] truncate">{row.tx.notes || "-"}</td>
+                      <td className="p-3">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDelete(row.tx.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                )}
+                {displayRows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="p-12 text-center text-muted-foreground">لا توجد عمليات في هذا الشهر</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           )}
         </CardContent>
       </Card>
